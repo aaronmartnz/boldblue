@@ -1,0 +1,2106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PARALLAX · Hero + Shapes</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,900;1,400;1,900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    font-family:'Inter Tight', sans-serif;
+    background:#fff; color:#01017c;
+    overflow-x:hidden;
+  }
+
+  /* === SECTION container === */
+  .section {
+    position:relative;
+    width:100%;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    overflow:hidden;
+  }
+
+  /* === HERO LAYER (lives inside the scroll-stage sticky) === */
+  /* It overlays the video canvas; the JS render loop pixel-dissolves
+     it into clip0, then fades it out — no separate section, no cut. */
+  .hero-layer { position:absolute; inset:0; z-index:6; background:#fff; color:#01017c; overflow:hidden; will-change:opacity; }
+  .hero-layer.gone { pointer-events:none; }
+  .hero-layer canvas.hero-canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  .hero-layer .hero-content { position:absolute; left:clamp(24px,5vw,80px); right:auto; top:50%; bottom:auto; transform:translateY(-50%); display:flex; align-items:flex-start; justify-content:center; flex-direction:column; pointer-events:none; z-index:2; }
+  .hero-layer .hero-sub { font-family:'Inter Tight',sans-serif; font-weight:400; font-style:normal; font-size:clamp(16px,1.8vw,22px); margin-top:0; max-width:min(520px,42vw); min-height:5.2em; text-align:left; line-height:1.3; pointer-events:auto; color:#01017c; letter-spacing:-0.01em; position:relative; }
+  /* rotating manifesto phrases in the hero — fade + subtle rise, looping */
+  .hero-sub .hero-phrase { position:absolute; left:0; right:0; top:0; opacity:0; transform:translateY(10px); transition:opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1); will-change:opacity,transform; }
+  .hero-sub .hero-phrase.on { opacity:1; transform:translateY(0); }
+
+  /* Brand icon — top left, sticky-like position inside hero */
+  .brand-icon { position:absolute; top:22px; left:32px; width:34px; height:48px; z-index:5; display:block; pointer-events:none; }
+  .brand-icon svg { width:100%; height:100%; display:block; overflow:visible; }
+  /* iso = two interlocking parts that fully SWAP vertical positions:
+     the right piece rises to where the left sits, the left drops to where
+     the right sits, hold, then swap back. No deforming — pure translate.
+     ~41% of each piece's height = the real offset between the two halves. */
+  .iso-left, .iso-right { transform-box:fill-box; transform-origin:center; }
+  .iso-left  { animation:isoSwapA 4.6s ease-in-out infinite; }
+  .iso-right { animation:isoSwapB 4.6s ease-in-out infinite; }
+  @keyframes isoSwapA {   /* left piece: base → down to right's slot → back */
+    0%   { transform:translateY(0); }
+    30%  { transform:translateY(0); }        /* hold at base */
+    50%  { transform:translateY(41%); }      /* moved into right's position */
+    80%  { transform:translateY(41%); }      /* hold swapped */
+    100% { transform:translateY(0); }
+  }
+  @keyframes isoSwapB {   /* right piece: base → up to left's slot → back */
+    0%   { transform:translateY(0); }
+    30%  { transform:translateY(0); }        /* hold at base */
+    50%  { transform:translateY(-41%); }     /* moved into left's position */
+    80%  { transform:translateY(-41%); }     /* hold swapped */
+    100% { transform:translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce){ .iso-left,.iso-right { animation:none; } }
+
+  .section-topbar { position:absolute; top:0; left:0; right:0; padding:32px 32px 20px 92px; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:24px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.3em; text-transform:uppercase; color:#01017c; opacity:0.7; z-index:3; pointer-events:none; }
+  .section-topbar .center { letter-spacing:0.35em; }
+  .section-topbar .right { justify-self:end; }
+  .section-bottom { position:absolute; bottom:24px; left:0; right:0; padding:20px 32px; display:grid; grid-template-columns:1fr auto 1fr; align-items:end; gap:24px; z-index:3; pointer-events:none; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:#01017c; opacity:0.7; }
+  .section-bottom .right { justify-self:end; }
+  .scroll-hint { letter-spacing:0.3em; }
+
+  /* === SCROLL-VIDEO STAGE — tall section, sticky full-screen video === */
+  .scroll-stage { position:relative; background:#fff; height:680vh; }
+  .scroll-stage .vstick { position:sticky; top:0; height:100vh; width:100%; overflow:hidden; background:#fff; }
+  .scroll-stage canvas.vcanvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .scroll-stage .vcaption { position:absolute; left:32px; bottom:36px; z-index:4; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.28em; text-transform:uppercase; color:#fff; opacity:0.85; pointer-events:none; mix-blend-mode:difference; }
+  .scroll-stage .vcount { position:absolute; right:32px; bottom:36px; z-index:4; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.2em; color:#fff; opacity:0.7; pointer-events:none; mix-blend-mode:difference; }
+
+  /* === SHAPES section — sticky scroll holds the manifesto === */
+  /* NOTE: .section sets overflow:hidden which breaks position:sticky on children,
+     so this section explicitly clears it. */
+  .section-shapes { background:#fff; color:#000; min-height:100vh; position:relative; overflow:visible; display:block; padding:0; }
+  .shapes-sticky { position:sticky; top:0; height:100vh; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#fff; isolation:isolate; }
+  .shapes-label { position:absolute; top:24px; left:32px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.3em; text-transform:uppercase; opacity:0.5; z-index:5; }
+  .shapes-hint { position:absolute; bottom:24px; left:0; right:0; text-align:center; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.2em; text-transform:uppercase; opacity:0.4; z-index:5; pointer-events:none; }
+  /* shapes anchored, free to overflow, never clipped */
+  .shapes-stage { position:relative; width:100%; max-width:1100px; height:560px; }
+  .shapes-meta { position:absolute; inset:0; pointer-events:none; overflow:visible; }
+  .shapes-layer { position:absolute; inset:0; filter:url(#shapes-meta-filter) blur(var(--shapes-blur,3px)); transition:filter 0.3s ease-out; overflow:visible; }
+  .shapes-cyan, .shapes-magenta { mix-blend-mode:multiply; opacity:0.7; }
+  .shapes-cyan .sh { background:#00ffff; }
+  .shapes-magenta .sh { background:#ff00ff; }
+  .shapes-black .sh { background:#01017c; }
+  .sh { position:absolute; will-change:transform,clip-path; transition:clip-path 1.4s cubic-bezier(0.7,0,0.3,1); }
+  /* text overlay covers the viewport; difference blend → black on white, inverted over shapes */
+  .shapes-text-stage { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:clamp(6px,1.3vh,16px); pointer-events:none; text-align:center; padding:0 4vw; }
+  .shapes-text-stage .shapes-title { font-family:'Inter Tight',sans-serif; font-weight:900; font-size:clamp(40px,6.5vw,96px); letter-spacing:-0.04em; text-transform:uppercase; color:#01017c; line-height:0.95; text-align:center; margin:0 0 clamp(4px,1vh,14px); }
+  /* knockout copy: white text, shown only where the blue blobs are (masked) */
+  .shapes-text-knockout { z-index:4; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-size:100% 100%; mask-size:100% 100%; }
+  .shapes-text-knockout .shapes-title,
+  .shapes-text-knockout .manifesto-line { color:#eaf2ff; }   /* very light blue / white */
+  .manifesto-line { font-family:'Inter Tight',sans-serif; font-weight:900; text-transform:uppercase; letter-spacing:-0.02em; line-height:1.0; font-size:clamp(20px,3.4vw,52px); color:#01017c; opacity:0; transform:translateY(16px); transition:opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1); white-space:nowrap; }
+  .manifesto-line.on { opacity:1; transform:translateY(0); }
+  .manifesto-line.first { font-size:clamp(26px,4.4vw,68px); }
+
+  /* === SECTION 3 — PROJECTS LIST + FLOATING IMAGES === */
+  .section-projects { background:#fff; color:#01017c; padding:120px 32px; min-height:100vh; align-items:flex-start; justify-content:center; }
+
+  /* ── WE ARE / CHAOS — giant glitch panel after the videos ── */
+  .section-chaos { background:#fff; color:#01017c; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:80px 24px; overflow:hidden; }
+  .chaos-wrap { width:100%; max-width:1400px; transform:scale(0.72); opacity:0; transition:transform 1.1s cubic-bezier(0.16,1,0.3,1), opacity 0.9s ease; transform-origin:center center; will-change:transform,opacity; }
+  .chaos-wrap.emerge { transform:scale(1); opacity:1; }
+  .chaos-line { font-family:'Archivo Black','Inter Tight',sans-serif; font-weight:900; text-transform:uppercase; line-height:0.82; letter-spacing:-0.05em; font-size:clamp(96px,26vw,440px); display:block; position:relative; color:#01017c; }
+  .chaos-line .glitch-base { position:relative; z-index:2; display:block; }
+  /* two colored ghost copies for RGB-split */
+  .chaos-line::before, .chaos-line::after { content:attr(data-text); position:absolute; left:0; top:0; width:100%; display:block; pointer-events:none; }
+  .chaos-line::before { color:#71e1ff; z-index:1; }
+  .chaos-line::after  { color:#ff8fab; z-index:1; }
+  /* idle: ghosts hidden behind the base */
+  .chaos-line::before, .chaos-line::after { opacity:0; }
+  /* glitch burst (added/removed by JS) */
+  .chaos-line.glitch::before { opacity:0.9; animation:chaosShiftA 0.42s steps(2,end) both; }
+  .chaos-line.glitch::after  { opacity:0.9; animation:chaosShiftB 0.42s steps(2,end) both; }
+  .chaos-line.glitch .glitch-base { animation:chaosSlice 0.42s steps(3,end) both; }
+
+  @keyframes chaosShiftA {
+    0%   { transform:translate(0,0); clip-path:inset(0 0 0 0); }
+    20%  { transform:translate(-9px,4px);  clip-path:inset(8% 0 62% 0); }
+    40%  { transform:translate(7px,-6px);  clip-path:inset(70% 0 8% 0); }
+    60%  { transform:translate(-12px,2px); clip-path:inset(34% 0 40% 0); }
+    80%  { transform:translate(5px,-3px);  clip-path:inset(0 0 80% 0); }
+    100% { transform:translate(0,0); clip-path:inset(0 0 0 0); }
+  }
+  @keyframes chaosShiftB {
+    0%   { transform:translate(0,0); clip-path:inset(0 0 0 0); }
+    20%  { transform:translate(9px,-4px);  clip-path:inset(58% 0 12% 0); }
+    40%  { transform:translate(-7px,6px);  clip-path:inset(12% 0 66% 0); }
+    60%  { transform:translate(11px,-2px); clip-path:inset(44% 0 28% 0); }
+    80%  { transform:translate(-6px,3px);  clip-path:inset(78% 0 4% 0); }
+    100% { transform:translate(0,0); clip-path:inset(0 0 0 0); }
+  }
+  @keyframes chaosSlice {
+    0%   { transform:translate(0,0); }
+    25%  { transform:translate(4px,0) skewX(-3deg); }
+    50%  { transform:translate(-5px,0) skewX(2deg); }
+    75%  { transform:translate(3px,0); }
+    100% { transform:translate(0,0); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .chaos-line.glitch::before, .chaos-line.glitch::after, .chaos-line.glitch .glitch-base { animation:none; }
+  }
+  .projects-inner { position:relative; width:100%; max-width:1100px; margin:0 auto; }
+  .projects-label { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.3em; text-transform:uppercase; opacity:0.5; margin-bottom:48px; }
+  .project-list { list-style:none; padding:0; margin:0; }
+  .project-list li { position:relative; font-family:'Inter Tight',sans-serif; font-weight:900; font-size:clamp(40px,7vw,96px); line-height:1.1; letter-spacing:-0.04em; text-transform:uppercase; color:#01017c; cursor:pointer; padding:12px 0; border-bottom:1px solid rgba(1,1,124,0.15); transition:opacity 0.3s ease, transform 0.3s ease; }
+  .project-list li:first-child { border-top:1px solid rgba(1,1,124,0.15); }
+  .project-list li .row { display:flex; justify-content:space-between; align-items:baseline; gap:24px; }
+  .project-list li .row .year { font-family:'JetBrains Mono',monospace; font-weight:400; font-size:13px; letter-spacing:0.2em; opacity:0.5; align-self:center; }
+  .project-list li em { font-style:italic; font-weight:400; letter-spacing:-0.02em; text-transform:none; }
+  /* Dim non-hovered items when one is hovered for nice focus */
+  .project-list:hover li:not(:hover) { opacity:0.3; }
+
+  .floating-img { position:absolute; width:340px; height:230px; pointer-events:none; transform:translate(-50%,-50%) scale(0); transition:transform 0.5s cubic-bezier(0.23,1,0.32,1), opacity 0.4s ease; opacity:0; z-index:10; overflow:hidden; border-radius:4px; box-shadow:0 24px 60px rgba(1,1,124,0.18); will-change:left,top,transform; background:#01017c; }
+  .floating-img.show { transform:translate(-50%,-50%) scale(1); opacity:1; }
+  .floating-img img, .floating-img svg, .floating-img video { width:100%; height:100%; object-fit:cover; display:block; }
+  .floating-img .fi-tag { position:absolute; left:14px; bottom:12px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:#fff; mix-blend-mode:difference; pointer-events:none; }
+
+  /* === DIRECTOR PORTFOLIO OVERLAY (floating menu, stays on the page) === */
+  .dir-overlay { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:clamp(20px,4vw,64px); background:rgba(1,1,40,0.55); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); opacity:0; pointer-events:none; transition:opacity 0.45s cubic-bezier(0.16,1,0.3,1); }
+  .dir-overlay.open { opacity:1; pointer-events:auto; }
+  .dir-panel { position:relative; width:100%; max-width:1180px; max-height:88vh; background:#fff; border-radius:8px; overflow:hidden; display:grid; grid-template-rows:auto auto 1fr; box-shadow:0 40px 120px rgba(1,1,80,0.4); transform:translateY(24px) scale(0.98); transition:transform 0.5s cubic-bezier(0.16,1,0.3,1); }
+  .dir-overlay.open .dir-panel { transform:translateY(0) scale(1); }
+  /* director switcher row */
+  .dir-nav { display:flex; flex-wrap:wrap; gap:8px; padding:clamp(14px,2vw,22px) clamp(20px,3.5vw,48px) clamp(10px,1.4vw,16px); border-bottom:1px solid rgba(1,1,124,0.08); }
+  .dir-tab { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:#01017c; background:transparent; border:1px solid rgba(1,1,124,0.22); border-radius:100px; padding:7px 14px; cursor:pointer; transition:background 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease; opacity:0.65; }
+  .dir-tab:hover { opacity:1; border-color:rgba(1,1,124,0.5); }
+  .dir-tab.active { background:#01017c; color:#fff; border-color:#01017c; opacity:1; }
+  .dir-head { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:clamp(20px,3vw,40px) clamp(20px,3.5vw,48px) clamp(14px,1.8vw,22px); border-bottom:1px solid rgba(1,1,124,0.12); }
+  .dir-head .dir-name { font-family:'Inter Tight',sans-serif; font-weight:900; font-size:clamp(34px,5.5vw,72px); letter-spacing:-0.04em; text-transform:uppercase; color:#01017c; line-height:0.92; }
+  .dir-head .dir-role { font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.2em; text-transform:uppercase; color:#01017c; opacity:0.55; margin-top:8px; }
+  .dir-close { flex:none; width:48px; height:48px; border-radius:50%; border:1px solid rgba(1,1,124,0.25); background:transparent; color:#01017c; font-family:'JetBrains Mono',monospace; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.25s ease, color 0.25s ease, transform 0.25s ease; }
+  .dir-close:hover { background:#01017c; color:#fff; transform:rotate(90deg); }
+  .dir-body { overflow-y:auto; padding:clamp(18px,2.5vw,32px) clamp(20px,3.5vw,48px) clamp(28px,4vw,48px); }
+  .dir-hero { position:relative; width:100%; aspect-ratio:16/9; background:#01017c; border-radius:6px; overflow:hidden; margin-bottom:clamp(18px,2.5vw,28px); }
+  .dir-hero video { width:100%; height:100%; object-fit:cover; display:block; }
+  .dir-hero .dir-hero-cap { position:absolute; left:18px; bottom:16px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:#fff; mix-blend-mode:difference; }
+  .dir-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:clamp(10px,1.4vw,18px); }
+  .dir-thumb { position:relative; aspect-ratio:16/9; border-radius:5px; overflow:hidden; background:#01017c; cursor:pointer; }
+  .dir-thumb video, .dir-thumb svg { width:100%; height:100%; object-fit:cover; display:block; }
+  .dir-thumb .dir-thumb-cap { position:absolute; left:10px; bottom:8px; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:#fff; mix-blend-mode:difference; pointer-events:none; }
+  .dir-thumb::after { content:''; position:absolute; inset:0; box-shadow:inset 0 0 0 0 rgba(1,1,124,0); transition:box-shadow 0.25s ease; }
+  .dir-thumb:hover::after { box-shadow:inset 0 0 0 2px #01017c; }
+
+  /* === CTA — dark blue panel, white button with hover effect === */
+  .section-cta { background:#01017c; color:#fff; min-height:58vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:80px 32px; text-align:center; }
+  .cta-kicker { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.35em; text-transform:uppercase; opacity:0.6; }
+  .cta-title { font-family:'Inter Tight',sans-serif; font-weight:900; font-size:clamp(28px,5vw,64px); letter-spacing:-0.03em; line-height:0.98; text-transform:uppercase; max-width:16ch; }
+  .cta-btn { position:relative; overflow:visible; border:none; cursor:pointer; background:#fff; color:#01017c; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; letter-spacing:0.15em; text-transform:uppercase; padding:20px 44px; border-radius:0; isolation:isolate; transition:color .3s ease, box-shadow .45s ease; box-shadow:0 0 0 0 rgba(255,255,255,0); }
+  /* canvas extends well beyond the button so pixels can scatter outward */
+  .cta-btn canvas.pixfill { position:absolute; left:-28px; right:-28px; top:-28px; bottom:-28px; width:calc(100% + 56px); height:calc(100% + 56px); z-index:-1; pointer-events:none; }
+  .cta-btn:hover { color:#01017c; }
+  .cta-btn span { position:relative; z-index:1; display:inline-block; transition:transform .45s cubic-bezier(.16,1,.3,1); }
+  .cta-btn:hover span { transform:translateX(4px); }
+  .cta-btn .arrow { display:inline-block; margin-left:10px; transition:transform .45s cubic-bezier(.16,1,.3,1); }
+  .cta-btn:hover .arrow { transform:translateX(8px); }
+
+  @media (max-width:900px) {
+    .hero-layer .hero-content { bottom:72px; }
+    .shapes-stage { height:480px; }
+    .floating-img { width:200px; height:140px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 1 — HERO (PARALLAX particles + chromatic)         -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- HERO + SCROLL-VIDEO STAGE — fused into one sticky block.  -->
+<!-- The blue hero (logo + ink) dissolves with the same pixel  -->
+<!-- /ink effect straight into clip0, then clips advance, then  -->
+<!-- the last clip dissolves into the Manifesto. No hard cut.  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="scroll-stage" id="scrollStage">
+  <div class="vstick">
+    <canvas class="vcanvas" id="vCanvas"></canvas>
+    <!-- HERO LAYER — lives on top of the video canvas; the render
+         loop fades / pixel-dissolves it into clip0 on scroll -->
+    <div class="hero-layer" id="heroLayer">
+      <div class="brand-icon" aria-hidden="true">
+        <svg class="brand-iso" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 402.4 567">
+          <path class="iso-left" fill="#01017c" d="M131.5,0h-11.7C54,0,.2,53.1,0,118.5c-.1,31.1,11.6,60.4,33.1,82.7C11.6,223.5-.1,252.8,0,283.9c.2,65.3,54,118.5,119.8,118.5h118V106.2C237.8,47.7,190.1,0,131.5,0ZM164.6,329.2h-44.8c-25.6,0-46.5-20.4-46.6-45.5,0-12.2,4.7-23.8,13.3-32.4,8.6-8.7,20.1-13.4,32.4-13.4h45.7v91.4ZM164.6,164.6h-45.7c-12.2,0-23.7-4.8-32.4-13.4-8.6-8.7-13.4-20.2-13.3-32.4,0-25.1,21-45.5,46.6-45.5h11.7c18.2,0,33.1,14.8,33.1,33.1v58.3Z"/>
+          <path class="iso-right" fill="#01017c" d="M402.4,283.1c-.2-65.3-54-118.5-119.8-118.5h-118v296.1c0,58.6,47.7,106.2,106.2,106.2h11.7c65.8,0,119.5-53.1,119.8-118.5.1-31.1-11.6-60.4-33.1-82.7,21.5-22.4,33.2-51.6,33.1-82.7ZM282.6,493.8h-11.7c-18.2,0-33.1-14.8-33.1-33.1v-58.3h45.7c12.2,0,23.7,4.8,32.4,13.4,8.6,8.7,13.4,20.2,13.3,32.4,0,25.1-21,45.5-46.6,45.5ZM315.9,315.7c-8.6,8.7-20.1,13.4-32.4,13.4h-45.7v-91.4h44.8c25.6,0,46.5,20.4,46.6,45.5,0,12.2-4.7,23.8-13.3,32.4Z"/>
+        </svg>
+      </div>
+      <header class="section-topbar">
+        <div class="left"></div>
+        <div class="center">— Studio —</div>
+        <div class="right">MX · 2026</div>
+      </header>
+      <canvas class="hero-canvas" id="heroParticles"></canvas>
+      <div class="hero-content">
+        <p class="hero-sub" id="heroSub"></p>
+      </div>
+      <div class="section-bottom">
+        <div class="left">№ 01</div>
+        <div class="center scroll-hint">Scroll ↓</div>
+        <div class="right">Intro</div>
+      </div>
+    </div>
+    <div class="vcaption" id="vCaption">Adrian</div>
+    <div class="vcount" id="vCount">01 / 05</div>
+  </div>
+  <video id="clip0" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/adrian.mp4"></video>
+  <video id="clip1" data-zoom="1.22" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/cris.mp4"></video>
+  <video id="clip2" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/fusco.mp4"></video>
+  <video id="clip3" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/jafet.mp4"></video>
+  <video id="clip4" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/jayson.mp4"></video>
+  <!-- Nairobi real clip — standalone, NOT part of the 5-clip scroll reel.
+       The scroll engine only pulls clip0..clip4 (for i<5), so this stays out of the sequence
+       and is used purely as Nairobi's preview + portfolio source. -->
+  <video id="clip5" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/nairobi.mp4"></video>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 3 — PROJECTS LIST · floating preview on hover    -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- WE ARE / CHAOS — giant glitch statement after the videos  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="section-chaos" id="section-chaos">
+  <div class="chaos-wrap">
+    <span class="chaos-line" id="chaosWeAre" data-text="WE ARE"><span class="glitch-base">WE ARE</span></span>
+    <span class="chaos-line" id="chaosChaos" data-text="CHAOS"><span class="glitch-base">CHAOS</span></span>
+  </div>
+</section>
+
+<section class="section section-projects" id="section-projects">
+  <div class="projects-inner" id="projects-container">
+    <div class="projects-label">Selected work · Hover to preview · Click to open</div>
+
+    <ul class="project-list">
+      <li data-img="1" data-clip="0">
+        <div class="row"><span>Adrian <em>— director</em></span><span class="year">2024</span></div>
+      </li>
+      <li data-img="2" data-clip="1">
+        <div class="row"><span>Cris <em>— cinematographer</em></span><span class="year">2023</span></div>
+      </li>
+      <li data-img="3" data-clip="2">
+        <div class="row"><span>Fusco <em>— colorist</em></span><span class="year">2023</span></div>
+      </li>
+      <li data-img="4" data-clip="3">
+        <div class="row"><span>Jafet <em>— editor</em></span><span class="year">2022</span></div>
+      </li>
+      <li data-img="5" data-clip="4">
+        <div class="row"><span>Jayson <em>— director</em></span><span class="year">2022</span></div>
+      </li>
+      <li data-img="6" data-clip="5">
+        <div class="row"><span>Nairobi <em>— colorist</em></span><span class="year">2021</span></div>
+      </li>
+    </ul>
+
+    <!-- Floating video previews — each shows the director's clip on hover.
+         The <video> inside is fed from the matching scroll-stage clip on
+         the fly (same decoded source), so no extra files are embedded. -->
+    <div class="floating-img" data-i="1" data-clip="0"></div>
+    <div class="floating-img" data-i="2" data-clip="1"></div>
+    <div class="floating-img" data-i="3" data-clip="2"></div>
+    <div class="floating-img" data-i="4" data-clip="3"></div>
+    <div class="floating-img" data-i="5" data-clip="4"></div>
+    <div class="floating-img" data-i="6" data-clip="5"></div>
+  </div>
+</section>
+
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 2 — SHAPES (Manifesto morphing metaballs)         -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="section section-shapes" id="section-shapes">
+  <div class="shapes-sticky">
+    <div class="shapes-label">02 — Manifesto</div>
+
+    <svg style="position:absolute;width:0;height:0;">
+      <defs>
+        <filter id="shapes-meta-filter">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="14"/>
+          <feColorMatrix mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8"/>
+        </filter>
+      </defs>
+    </svg>
+
+    <div class="shapes-stage" id="shapes-stage">
+      <div class="shapes-meta">
+        <div class="shapes-layer shapes-cyan" id="shapes-cyan"></div>
+        <div class="shapes-layer shapes-magenta" id="shapes-magenta"></div>
+        <div class="shapes-layer shapes-black" id="shapes-black"></div>
+      </div>
+    </div>
+
+    <div class="shapes-text-stage" id="manifesto">
+      <h3 class="shapes-title">MANIFESTO</h3>
+      <div class="manifesto-line first">WE ARE BOLD — THAT'S PRETTY MUCH IT</div>
+      <div class="manifesto-line">BORN IN THE SCROLL. SHAPED BY THE CHAOS OF CDMX.</div>
+      <div class="manifesto-line">A DIFFERENT EYE.</div>
+      <div class="manifesto-line">A DIFFERENT VISION.</div>
+      <div class="manifesto-line">NOT THE GENERATION THEY ARE USED TO SEEING.</div>
+      <div class="manifesto-line">MAKING BEING BOLD OUR BLUEPRINT</div>
+    </div>
+
+    <!-- knockout copy: identical text in white, masked to appear ONLY where
+         the blue blobs are, so letters read WHITE over the shapes, BLUE on
+         white. Text is mirrored from #manifesto by JS; mask updated per-frame. -->
+    <div class="shapes-text-stage shapes-text-knockout" id="manifesto-knockout" aria-hidden="true">
+      <h3 class="shapes-title">MANIFESTO</h3>
+      <div class="manifesto-line first">WE ARE BOLD — THAT'S PRETTY MUCH IT</div>
+      <div class="manifesto-line">BORN IN THE SCROLL. SHAPED BY THE CHAOS OF CDMX.</div>
+      <div class="manifesto-line">A DIFFERENT EYE.</div>
+      <div class="manifesto-line">A DIFFERENT VISION.</div>
+      <div class="manifesto-line">NOT THE GENERATION THEY ARE USED TO SEEING.</div>
+      <div class="manifesto-line">MAKING BEING BOLD OUR BLUEPRINT</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- CTA — dark blue panel with white hover-fill button       -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="section-cta" id="section-cta">
+  <div class="cta-kicker">Let's make something bold</div>
+  <h2 class="cta-title">Ready when you are</h2>
+  <button class="cta-btn" id="ctaBtn"><canvas class="pixfill" id="ctaPix"></canvas><span>Click to action</span><span class="arrow">→</span></button>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- DIRECTOR PORTFOLIO OVERLAY — floating menu over the page. -->
+<!-- Opens on click of a roster name; big reel + thumbnail      -->
+<!-- gallery, all without leaving the page.                     -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="dir-overlay" id="dirOverlay" aria-hidden="true">
+  <div class="dir-panel" role="dialog" aria-modal="true">
+    <!-- director switcher: jump between directors without closing -->
+    <div class="dir-nav" id="dirNav">
+      <!-- director tabs injected by JS -->
+    </div>
+    <div class="dir-head">
+      <div>
+        <div class="dir-name" id="dirName">Adrian</div>
+        <div class="dir-role" id="dirRole">Director</div>
+      </div>
+      <button class="dir-close" id="dirClose" aria-label="Close">✕</button>
+    </div>
+    <div class="dir-body">
+      <div class="dir-hero" id="dirHero">
+        <!-- big reel video injected by JS -->
+        <div class="dir-hero-cap" id="dirHeroCap">Reel · 2024</div>
+      </div>
+      <div class="dir-grid" id="dirGrid">
+        <!-- thumbnails injected by JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// SECTION VISIBILITY TRACKER
+// Loops in each section check these flags and skip work
+// when their section is offscreen OR tab is inactive.
+// Default: scrollStage visible (it's the first thing the user
+// sees), others false until observer confirms.
+// ═══════════════════════════════════════════════════════
+window.__sectionVisible = {
+  'scrollStage': true,
+  'section-shapes': false,
+  'section-projects': false
+};
+window.__tabActive = !document.hidden;
+document.addEventListener('visibilitychange', function() {
+  window.__tabActive = !document.hidden;
+});
+(function() {
+  function attach() {
+    if (!('IntersectionObserver' in window)) {
+      // Fallback: assume all sections visible
+      window.__sectionVisible = {
+        'scrollStage': true,
+        'section-shapes': true,
+        'section-projects': true
+      };
+      return;
+    }
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        var id = entry.target.id;
+        if (id) window.__sectionVisible[id] = entry.isIntersecting;
+      });
+    }, { threshold: [0, 0.05, 0.5], rootMargin: '20px' });
+    ['scrollStage', 'section-shapes', 'section-projects'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attach);
+  } else {
+    attach();
+  }
+})();
+
+
+// ═══════════════════════════════════════════════════════
+// HERO LOGO GLITCH — 3-tint chromatic split + pixelated bitmap
+// Sin hover: solo el logo azul base. Glitches ambient siguen
+// activos (slices, fragments, blocks) — el ambient da personalidad.
+// Con hover: chroma sube de 0 a 20px → aparecen ghost cyan + azul claro.
+// ═══════════════════════════════════════════════════════
+var LOGO_SVG_RAW = '<svg xmlns="http://www.w3.org/2000/svg" width="563.9" height="107.9" viewBox="0 0 563.9 107.9" preserveAspectRatio="xMidYMid meet"><g fill="COLOR"><path d="M122.7,30.9c-10.2,0-19.9,4-27.1,11.2-7.2,7.2-11.2,16.9-11.2,27.1s4,19.9,11.2,27.1c7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1s-4-19.9-11.2-27.1c-7.2-7.2-16.9-11.2-27.1-11.2ZM122.7,88c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM44.4,0H0v107.9h44.4c17.6,0,32.1-14.2,32.1-31.8,0-8.3-3.1-16.2-8.9-22.2,5.8-6,8.9-13.8,8.9-22.2,0-17.5-14.5-31.8-32.1-31.8ZM44.4,88.3h-24.8v-24.5h25c3.3,0,6.4,1.3,8.7,3.6,2.3,2.3,3.6,5.4,3.6,8.7,0,6.7-5.6,12.2-12.5,12.2ZM53.4,40.5c-2.3,2.3-5.4,3.6-8.7,3.6h-25v-24.5h24.8c6.9,0,12.5,5.5,12.5,12.2,0,3.3-1.3,6.4-3.6,8.7ZM372.2,107.8h19.6V0h-19.6v107.8ZM169.8,107.8h19.6V0h-19.6v107.8ZM458.5,69.2c0,10.3-8.4,18.7-18.7,18.7s-18.7-8.4-18.7-18.7V29.7h-19.6v39.5c0,10.2,4,19.9,11.2,27.1,7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1V29.7h-19.6v39.5ZM563.9,79.1v-9.8c0-10.2-4-19.9-11.2-27.1-7.2-7.2-16.9-11.2-27.1-11.2s-19.9,4-27.1,11.2c-7.2,7.2-11.2,16.9-11.2,27.1h0s0,0,0,0c0,10.2,4,19.9,11.2,27.1,7.2,7.2,16.9,11.2,27.1,11.2s11.1-1.2,16.1-3.5c4-1.9,7.8-4.5,11-7.7,1.1-1.1,2-2.2,3-3.3l-4-1.9-11.4-5.4-3.4-1.6h0c-2,1.5-4.2,2.6-6.7,3.3-1.5.4-3.1.6-4.7.6-4.4,0-8.5-1.5-11.7-4.1-1.7-1.4-3.2-3-4.3-4.9h0s54.3,0,54.3,0ZM525.6,50.5c6.7,0,12.7,3.6,16,8.9h-31.9c3.3-5.4,9.2-8.9,16-8.9ZM254.1,35.8c-5.7-3.2-12.1-4.9-18.7-4.9-10.2,0-19.9,4-27.1,11.2-7.2,7.2-11.2,16.9-11.2,27.1s4,19.9,11.2,27.1c7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1V0h-19.6v35.7ZM235.4,88c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM326.6,30.9c-6.7,0-13.1,1.7-18.7,4.9V0h-19.6v69.2c0,10.2,4,19.9,11.2,27.1,7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1s-4-19.9-11.2-27.1c-7.2-7.2-16.9-11.2-27.1-11.2ZM326.6,88c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7Z"/></g></svg>';
+
+function makeLogo(color) {
+  var img = new Image();
+  img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(LOGO_SVG_RAW.replace('COLOR', color));
+  return img;
+}
+var logoBlue = makeLogo('#ffffff');
+var logoCyan = makeLogo('#7de3ff');
+var logoMagenta = makeLogo('#b9c4ff');
+
+var heroLoaded = 0, heroReady = false;
+function heroOnLoad() { heroLoaded++; if (heroLoaded >= 3) heroReady = true; }
+logoBlue.onload = heroOnLoad;
+logoCyan.onload = heroOnLoad;
+logoMagenta.onload = heroOnLoad;
+
+// ── Scroll-velocity tracker ──
+var __scrollVel = 0, __lastScroll = window.scrollY || 0;
+(function trackScroll(){
+  var cur = window.scrollY || 0;
+  __scrollVel += ((cur - __lastScroll) - __scrollVel) * 0.18;
+  __lastScroll = cur;
+  if (!isFinite(__scrollVel)) __scrollVel = 0;
+  requestAnimationFrame(trackScroll);
+})();
+
+// ── PARAMS for the fluid sim (sliders write here) ──
+window.FXP = {
+  fForce: 1600,
+  fRadius: 0.0006,
+  fCurl: 1,
+  fIter: 22,
+  fVelDiss: 0.985,
+  fDyeDiss: 0.975,
+  fDistort: 1,
+  ambient: 0,       // Off
+  ambAmt: 0.15,
+  inkMode: 1,       // Tinta visible
+  logoVis: 1.0,
+  fill: 1.3,
+  obstacle: 0,
+  glass: 0,
+  speed: 1.0,
+  edgeInk: 0.0,
+  colA:[0.004,0.004,0.486], colB:[0.10,0.20,0.95]
+};
+
+// ══════════════════════════════════════════════════════════
+// REAL FLUID SIMULATION (Navier-Stokes on GPU) → distorts the logo
+// Based on the standard GPU fluid solver: advect → divergence →
+// pressure (Jacobi) → gradient subtract → vorticity, with
+// ping-pong float framebuffers. Mouse + scroll inject force & dye.
+// ══════════════════════════════════════════════════════════
+(function() {
+  var canvas = document.getElementById('heroParticles');
+  if (!canvas) return;
+  var gl = canvas.getContext('webgl', {alpha:true, premultipliedAlpha:false})
+        || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+
+  // float textures (needed for the simulation fields)
+  var hf = gl.getExtension('OES_texture_half_float');
+  var hfl = gl.getExtension('OES_texture_half_float_linear');
+  gl.getExtension('OES_texture_float');
+  gl.getExtension('OES_texture_float_linear');
+  var TEXTYPE = hf ? hf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
+
+  // ---------- shader plumbing ----------
+  function compile(type, src){
+    var s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error('fluid shader:',gl.getShaderInfoLog(s),src);
+    return s;
+  }
+  function program(vs,fs){
+    var p=gl.createProgram();
+    gl.attachShader(p,compile(gl.VERTEX_SHADER,vs));
+    gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)) console.error('fluid link:',gl.getProgramInfoLog(p));
+    return p;
+  }
+  var quad=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,quad);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+  function bindQuad(p){ var l=gl.getAttribLocation(p,'aPos'); gl.bindBuffer(gl.ARRAY_BUFFER,quad); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l,2,gl.FLOAT,false,0,0); }
+
+  var VS = 'attribute vec2 aPos;varying vec2 vUv;void main(){vUv=aPos*0.5+0.5;gl_Position=vec4(aPos,0.0,1.0);}';
+
+  // base sampling helper used in many shaders
+  var HEAD = 'precision highp float;varying vec2 vUv;uniform vec2 texel;';
+
+  // advection: move a field along the velocity field.
+  // useMask 1 = logo is wall (ink stays OUT). useMask 2 = glass (ink stays IN).
+  var ADVECT = HEAD+'uniform sampler2D uVel;uniform sampler2D uSrc;uniform sampler2D uMask;uniform float dt;uniform float diss;uniform float useMask;'+
+   'void main(){'+
+   'float m=texture2D(uMask,vUv).a;'+
+   'bool wall = (useMask>1.5)?(m<0.4):(useMask>0.5 && m>0.4);'+
+   'if(wall){gl_FragColor=vec4(0.0);return;}'+
+   'vec2 c=vUv-dt*texture2D(uVel,vUv).xy*texel;'+
+   'vec4 r=texture2D(uSrc,c);gl_FragColor=diss*r;}';
+
+  // obstacle: zero velocity at the wall (outside logo in glass mode, inside in obstacle mode)
+  var OBSTACLE = HEAD+'uniform sampler2D uVel;uniform sampler2D uMask;uniform float useMask;'+
+   'void main(){'+
+   'float m=texture2D(uMask,vUv).a;'+
+   'bool wall = (useMask>1.5)?(m<0.4):(m>0.4);'+
+   'vec2 v=texture2D(uVel,vUv).xy;'+
+   'if(wall){v=vec2(0.0);}'+
+   'gl_FragColor=vec4(v,0.0,1.0);}';
+
+  // divergence of velocity
+  var DIVERGENCE = HEAD+'uniform sampler2D uVel;'+
+   'void main(){'+
+   'float L=texture2D(uVel,vUv-vec2(texel.x,0.0)).x;'+
+   'float R=texture2D(uVel,vUv+vec2(texel.x,0.0)).x;'+
+   'float B=texture2D(uVel,vUv-vec2(0.0,texel.y)).y;'+
+   'float T=texture2D(uVel,vUv+vec2(0.0,texel.y)).y;'+
+   'float div=0.5*((R-L)+(T-B));'+
+   'gl_FragColor=vec4(div,0.0,0.0,1.0);}';
+
+  // pressure solve (Jacobi iteration)
+  var PRESSURE = HEAD+'uniform sampler2D uPres;uniform sampler2D uDiv;'+
+   'void main(){'+
+   'float L=texture2D(uPres,vUv-vec2(texel.x,0.0)).x;'+
+   'float R=texture2D(uPres,vUv+vec2(texel.x,0.0)).x;'+
+   'float B=texture2D(uPres,vUv-vec2(0.0,texel.y)).x;'+
+   'float T=texture2D(uPres,vUv+vec2(0.0,texel.y)).x;'+
+   'float div=texture2D(uDiv,vUv).x;'+
+   'float p=(L+R+B+T-div)*0.25;'+
+   'gl_FragColor=vec4(p,0.0,0.0,1.0);}';
+
+  // subtract pressure gradient → make velocity divergence-free
+  var GRADIENT = HEAD+'uniform sampler2D uPres;uniform sampler2D uVel;'+
+   'void main(){'+
+   'float L=texture2D(uPres,vUv-vec2(texel.x,0.0)).x;'+
+   'float R=texture2D(uPres,vUv+vec2(texel.x,0.0)).x;'+
+   'float B=texture2D(uPres,vUv-vec2(0.0,texel.y)).x;'+
+   'float T=texture2D(uPres,vUv+vec2(0.0,texel.y)).x;'+
+   'vec2 v=texture2D(uVel,vUv).xy;'+
+   'v-=vec2(R-L,T-B)*0.5;'+
+   'gl_FragColor=vec4(v,0.0,1.0);}';
+
+  // curl (for vorticity confinement)
+  var CURL = HEAD+'uniform sampler2D uVel;'+
+   'void main(){'+
+   'float L=texture2D(uVel,vUv-vec2(texel.x,0.0)).y;'+
+   'float R=texture2D(uVel,vUv+vec2(texel.x,0.0)).y;'+
+   'float B=texture2D(uVel,vUv-vec2(0.0,texel.y)).x;'+
+   'float T=texture2D(uVel,vUv+vec2(0.0,texel.y)).x;'+
+   'float c=0.5*((R-L)-(T-B));'+
+   'gl_FragColor=vec4(c,0.0,0.0,1.0);}';
+
+  // vorticity confinement: reinject swirl detail
+  var VORTICITY = HEAD+'uniform sampler2D uVel;uniform sampler2D uCurl;uniform float curl;uniform float dt;'+
+   'void main(){'+
+   'float L=texture2D(uCurl,vUv-vec2(texel.x,0.0)).x;'+
+   'float R=texture2D(uCurl,vUv+vec2(texel.x,0.0)).x;'+
+   'float B=texture2D(uCurl,vUv-vec2(0.0,texel.y)).x;'+
+   'float T=texture2D(uCurl,vUv+vec2(0.0,texel.y)).x;'+
+   'float c=texture2D(uCurl,vUv).x;'+
+   'vec2 force=0.5*vec2(abs(T)-abs(B),abs(R)-abs(L));'+
+   'force/=length(force)+1e-4;'+
+   'force*=curl*c;force.y*=-1.0;'+
+   'vec2 v=texture2D(uVel,vUv).xy+force*dt;'+
+   'gl_FragColor=vec4(clamp(v,-1000.0,1000.0),0.0,1.0);}';
+
+  // splat: inject force / dye with a gaussian dab (not inside the logo)
+  var SPLAT = HEAD+'uniform sampler2D uTarget;uniform sampler2D uMask;uniform float aspect;uniform vec3 color;uniform vec2 point;uniform float radius;uniform float useMask;'+
+   'void main(){'+
+   'vec2 p=vUv-point;p.x*=aspect;'+
+   'vec3 splat=exp(-dot(p,p)/radius)*color;'+
+   'vec3 base=texture2D(uTarget,vUv).xyz;'+
+   'float m=texture2D(uMask,vUv).a;'+
+   'bool block = (useMask>1.5)?(m<0.4):(useMask>0.5 && m>0.4);'+
+   'if(block){gl_FragColor=vec4(base,1.0);return;}'+
+   'gl_FragColor=vec4(base+splat,1.0);}';
+
+  // final display: use the dye field to displace the logo texture
+  var DISPLAY = HEAD+'uniform sampler2D uDye;uniform sampler2D uLogo;uniform sampler2D uVel;'+
+   'uniform float uDistort;uniform vec3 uColA;uniform vec3 uColB;uniform float ready;'+
+   'uniform float uInk;uniform float uLogoVis;uniform float uFill;uniform float uObstacle;'+
+   'uniform float uTime;uniform float uEdgeInk;uniform float uGlass;'+
+   'float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}'+
+   'float nz(vec2 p){vec2 i=floor(p),f=fract(p);float a=h(i),b=h(i+vec2(1.,0.)),c=h(i+vec2(0.,1.)),d=h(i+vec2(1.,1.));vec2 u=f*f*(3.-2.*f);return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);}'+
+   // edge field: how close this pixel is to the logo outline
+   'float edge(vec2 uv){'+
+     'float c=texture2D(uLogo,uv).a;'+
+     'float e=0.0; const int N=8;'+
+     'for(int i=0;i<8;i++){ float an=float(i)/8.0*6.2832; vec2 o=vec2(cos(an),sin(an));'+
+       'e+=abs(texture2D(uLogo,uv+o*texel*3.0).a - c); }'+
+     'return clamp(e*0.5,0.0,1.0);'+
+   '}'+
+   // interior depth: ~0 at the rim, ~1 deep inside the shape (multi-ring sample)
+   'float depth(vec2 uv){'+
+     'float dsum=0.0;'+
+     'for(int i=0;i<10;i++){ float an=float(i)/10.0*6.2832;'+
+       'vec2 o=vec2(cos(an),sin(an));'+
+       'dsum+=texture2D(uLogo,uv+o*texel*9.0).a;'+
+       'dsum+=texture2D(uLogo,uv+o*texel*4.0).a; }'+
+     'return clamp(dsum/20.0,0.0,1.0);'+
+   '}'+
+   'void main(){'+
+   'vec2 vel=texture2D(uVel,vUv).xy;'+
+   'vec3 dye=texture2D(uDye,vUv).rgb;'+
+   'float amt=length(dye);'+
+   // edges are pushed by the fluid velocity → bordes se mueven al pasar el cursor
+   'vec2 off=vel*texel*uDistort;'+
+   'float a=texture2D(uLogo,clamp(vUv+off,0.0,1.0)).a;'+
+   'float aStatic=texture2D(uLogo,vUv).a;'+
+   'if(ready<0.5){gl_FragColor=vec4(1.0,1.0,1.0,1.0);return;}'+
+   'vec3 outc;'+
+   'if(uGlass>0.5){'+
+     // ===== REFERENCE AURA LOOK + edges move on hover =====
+     // sample shape & depth at the velocity-displaced position so the whole
+     // blob deforms where the cursor pushes the fluid
+     'vec2 duv=clamp(vUv+off*1.5,0.0,1.0);'+
+     'float shape=texture2D(uLogo,duv).a;'+
+     'float dep=depth(duv);'+
+     // colour ramp: white → bright blue (rim) → deep navy/near-black (core)
+     'vec3 bright=uColB;'+                                   // luminous blue at the edge
+     'vec3 core=uColA*0.35;'+                                // near-black deep core
+     'vec3 body=mix(bright, core, smoothstep(0.15,0.95,dep));'+
+     // soft feather of the silhouette into white (the aura blur)
+     'float mask=smoothstep(0.1,0.6,shape);'+
+     'outc=mix(vec3(1.0), body, mask);'+
+     // extra glow bleed just outside the edge
+     'float glow=smoothstep(0.0,0.45,shape)*(1.0-mask);'+
+     'outc=mix(outc, bright, glow*0.5);'+
+   '} else if(uObstacle>0.5){'+
+     // ===== OBSTACLE MODE: white bg, blue ink swirling, blue logo =====
+     'float dens=clamp(amt*1.6,0.0,1.0);'+
+     'vec3 deep=uColA;vec3 mid=uColB;'+
+     'vec3 ink=mix(mid,deep,smoothstep(0.45,1.0,dens));'+
+     'outc=mix(vec3(1.0), ink, smoothstep(0.015,0.5,dens));'+   // fluid ink over white
+     // ----- INDEPENDENT EDGE INK: ink that lives on the logo outline -----
+     'float ed=edge(vUv);'+
+     'float flow=nz(vUv*7.0 + vec2(uTime*0.3, -uTime*0.2))*0.6 + nz(vUv*15.0 - uTime*0.25)*0.4;'+
+     'float edgeInk=ed*smoothstep(0.2,0.9,flow)*uEdgeInk;'+      // animated, only at the rim
+     'vec3 eInk=mix(mid,deep,0.5);'+
+     'outc=mix(outc, eInk, clamp(edgeInk,0.0,1.0));'+
+     // logo body solid blue on top
+     'outc=mix(outc, uColA, smoothstep(0.35,0.5,aStatic));'+
+   '} else if(uInk>0.5){'+
+     'float dens=clamp(amt*1.4 + a*uFill, 0.0, 1.0);'+
+     'float core=smoothstep(0.5,1.0,dens);'+
+     // white background, ink rendered in blue tints (inverted look)
+     'vec3 bg=vec3(1.0);'+                                // white background
+     'vec3 deepBlue=uColB;'+                              // deep/bright blue ink body
+     'vec3 tint=mix(uColB, uColA, core);'+               // bright-blue → deep-navy core
+     'outc=mix(bg, tint, smoothstep(0.02,0.55,dens));'+
+     'outc=mix(outc, uColA, a*uLogoVis*0.9);'+            // solid blue logo on top
+   '} else {'+
+     'float av=a*uLogoVis;'+
+     'vec3 bg=uColA;'+
+     'vec3 col=mix(vec3(1.0),uColB,clamp(amt*1.5,0.0,1.0));'+   // white→light-blue ink
+     'outc=mix(bg,col,av);'+
+     'outc=mix(outc,col,clamp(amt*0.25,0.0,1.0)*(1.0-av));'+
+   '}'+
+   'gl_FragColor=vec4(outc,1.0);}';
+
+  var pAdvect=program(VS,ADVECT), pDiv=program(VS,DIVERGENCE), pPres=program(VS,PRESSURE),
+      pGrad=program(VS,GRADIENT), pCurl=program(VS,CURL), pVort=program(VS,VORTICITY),
+      pSplat=program(VS,SPLAT), pDisplay=program(VS,DISPLAY), pObstacle=program(VS,OBSTACLE);
+
+  // ---------- framebuffers ----------
+  function createFBO(w,h,filter){
+    var tex=gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D,tex);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,filter);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,filter);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,TEXTYPE,null);
+    var fbo=gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+    gl.viewport(0,0,w,h);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    return {tex:tex,fbo:fbo,w:w,h:h,texel:[1/w,1/h]};
+  }
+  function createDouble(w,h,filter){
+    var a=createFBO(w,h,filter),b=createFBO(w,h,filter);
+    return {read:a,write:b,swap:function(){var t=this.read;this.read=this.write;this.write=t;}};
+  }
+
+  var SIM=128, DYE=512;           // sim resolution (low) vs dye/display (high)
+  var filter = hfl ? gl.LINEAR : gl.NEAREST;
+  var velocity, divergence, curlFBO, pressure, dye;
+  function initFBOs(){
+    velocity=createDouble(SIM,SIM,filter);
+    divergence=createFBO(SIM,SIM,gl.NEAREST);
+    curlFBO=createFBO(SIM,SIM,gl.NEAREST);
+    pressure=createDouble(SIM,SIM,gl.NEAREST);
+    dye=createDouble(DYE,DYE,filter);
+  }
+  initFBOs();
+
+  // logo texture (baked from the SVG, device-res for sharpness)
+  var logoTex=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,logoTex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,0]));
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  var off=document.createElement('canvas'), octx=off.getContext('2d');
+  var W,H;
+  function bakeLogo(){
+    if(!heroReady) return;
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    var BW=Math.round(W*dpr), BH=Math.round(H*dpr);
+    off.width=BW; off.height=BH;
+    octx.clearRect(0,0,BW,BH);
+    octx.imageSmoothingEnabled=true; octx.imageSmoothingQuality='high';
+    // preserve the wordmark's real aspect ratio (546.2 x 104.5 ≈ 5.23:1).
+    // SVG data-URIs can report unreliable natural sizes, so use the known ratio.
+    var ar = 546.2/104.5;
+    var dw = BW*0.66;            // target width ≈ 66% of canvas
+    var dh = dw/ar;
+    var maxH = BH*0.20;          // wordmark is wide & short — cap height low
+    if(dh>maxH){ dh=maxH; dw=dh*ar; }
+    var maxW = BW*0.82;
+    if(dw>maxW){ dw=maxW; dh=dw/ar; }
+    octx.drawImage(logoBlue,(BW-dw)/2,(BH-dh)/2,dw,dh);
+    gl.bindTexture(gl.TEXTURE_2D,logoTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);   // canvas y-down → gl y-up
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,off);
+  }
+  function resize(){
+    W=canvas.offsetWidth; H=canvas.offsetHeight;
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.max(1,W*dpr); canvas.height=Math.max(1,H*dpr);
+    bakeLogo();
+  }
+  resize();
+  var rzt; window.addEventListener('resize',function(){clearTimeout(rzt);rzt=setTimeout(resize,150);});
+  [logoBlue,logoCyan,logoMagenta].forEach(function(im){im.addEventListener('load',bakeLogo);});
+
+  function draw(fbo){ gl.bindFramebuffer(gl.FRAMEBUFFER,fbo.fbo); gl.viewport(0,0,fbo.w,fbo.h); gl.drawArrays(gl.TRIANGLES,0,6); }
+  function u(p,n){return gl.getUniformLocation(p,n);}
+  function tex(unit,t){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);return unit;}
+
+  // ---------- input ----------
+  var pointer={x:0.5,y:0.5,dx:0,dy:0,down:false,moved:false,px:0.5,py:0.5};
+  canvas.addEventListener('mousemove',function(e){
+    var r=canvas.getBoundingClientRect();
+    var nx=(e.clientX-r.left)/r.width, ny=1.0-(e.clientY-r.top)/r.height;
+    pointer.dx=(nx-pointer.x); pointer.dy=(ny-pointer.y);
+    pointer.x=nx; pointer.y=ny; pointer.moved=true;
+  });
+  canvas.addEventListener('mouseleave',function(){pointer.moved=false;pointer.dx=0;pointer.dy=0;});
+
+  // ---------- TRIGGERS ----------
+  // burst queue: each entry {x,y,type,life} processed in step()
+  var bursts=[];
+  function ring(cx,cy,dirsign,strength,col){
+    // emit a ring of splats outward (explosion) or inward (implosion)
+    var N=18;
+    for(var i=0;i<N;i++){
+      var a=i/N*6.2832;
+      var ox=Math.cos(a), oy=Math.sin(a);
+      var px=cx+ox*0.04, py=cy+oy*0.04;
+      splat(px,py, ox*strength*dirsign, oy*strength*dirsign, col[0],col[1],col[2]);
+    }
+  }
+  canvas.addEventListener('mousedown',function(e){
+    var r=canvas.getBoundingClientRect();
+    var nx=(e.clientX-r.left)/r.width, ny=1.0-(e.clientY-r.top)/r.height;
+    pointer.down=true;
+    var P=window.FXP;
+    if(e.shiftKey) ring(nx,ny,-1,P.fForce*0.5,[P.colB[0]*0.6,P.colB[1]*0.6,P.colB[2]*0.6]); // shift+click = implosión
+    else ring(nx,ny,1,P.fForce*0.8,[P.colB[0]*0.8,P.colB[1]*0.8,P.colB[2]]);                 // click = explosión
+  });
+  canvas.addEventListener('mouseup',function(){pointer.down=false;});
+  window.addEventListener('keydown',function(e){
+    if(e.code==='Space'){ e.preventDefault(); var P=window.FXP; ring(0.5,0.5,1,P.fForce*1.4,[P.colB[0],P.colB[1],P.colB[2]]); } // espacio = onda de choque central
+  });
+
+  function splat(x,y,dx,dy,colr,colg,colb){
+    var P=window.FXP;
+    var useMask=P.obstacle?1.0:0.0;
+    gl.useProgram(pSplat); bindQuad(pSplat);
+    gl.uniform2f(u(pSplat,'texel'),velocity.read.texel[0],velocity.read.texel[1]);
+    gl.uniform1i(u(pSplat,'uTarget'),tex(0,velocity.read.tex));
+    gl.uniform1i(u(pSplat,'uMask'),tex(2,logoTex));
+    gl.uniform1f(u(pSplat,'useMask'),useMask);
+    gl.uniform1f(u(pSplat,'aspect'),W/H);
+    gl.uniform2f(u(pSplat,'point'),x,y);
+    gl.uniform3f(u(pSplat,'color'),dx,dy,0.0);
+    gl.uniform1f(u(pSplat,'radius'),P.fRadius);
+    draw(velocity.write); velocity.swap();
+    gl.uniform1i(u(pSplat,'uTarget'),tex(0,dye.read.tex));
+    gl.uniform1i(u(pSplat,'uMask'),tex(2,logoTex));
+    gl.uniform2f(u(pSplat,'texel'),dye.read.texel[0],dye.read.texel[1]);
+    gl.uniform3f(u(pSplat,'color'),colr,colg,colb);
+    draw(dye.write); dye.swap();
+  }
+
+  // ---------- step ----------
+  var lastT=performance.now(), T=0;
+  function step(now){
+    var P=window.FXP;
+    var dt=Math.min((now-lastT)/1000,0.016); lastT=now; T+=dt*(window.FXP.speed||1);
+    if(heroReady && !baked){bakeLogo();baked=true;}
+
+    if (!window.__tabActive || (window.__sectionVisible && window.__sectionVisible['scrollStage']===false)) {
+      requestAnimationFrame(step); return;
+    }
+    var cB=P.colB;
+
+    // pointer drag
+    if(pointer.moved){
+      var fx=pointer.dx*P.fForce, fy=pointer.dy*P.fForce;
+      if(Math.abs(fx)>0.00001||Math.abs(fy)>0.00001) splat(pointer.x,pointer.y,fx,fy,cB[0]*0.4,cB[1]*0.4,cB[2]*0.4);
+      pointer.dx=0;pointer.dy=0;pointer.moved=false;
+    }
+    // scroll gust
+    var sv=Math.max(-1,Math.min(1,(__scrollVel||0)/30));
+    if(Math.abs(sv)>0.02) splat(0.5,0.5, sv*P.fForce*1.5,0.0,cB[0]*0.3,cB[1]*0.3,cB[2]*0.3);
+
+    // ===== AMBIENT MODE (automatic, no input needed) =====
+    var amb=P.ambient, amt=P.ambAmt;
+    if(amb===1){ // MAR — olas laterales que mecen
+      var yy=0.5+Math.sin(T*0.7)*0.18;
+      splat(0.5+Math.sin(T*0.9)*0.3, yy, Math.cos(T*0.9)*P.fForce*amt, Math.sin(T*1.3)*P.fForce*amt*0.3, cB[0]*0.3,cB[1]*0.35,cB[2]*0.4);
+    } else if(amb===2){ // OLEAJE — empuje horizontal alterno (marea)
+      splat(T%2<1?0.02:0.98, 0.5+Math.sin(T)*0.2, (T%2<1?1:-1)*P.fForce*amt*1.4, 0, cB[0]*0.25,cB[1]*0.3,cB[2]*0.4);
+    } else if(amb===3){ // LLUVIA — gotas aleatorias cayendo
+      if(Math.random()<0.6){ var rx=Math.random(); splat(rx,1.0,(Math.random()-0.5)*P.fForce*amt*0.3,-P.fForce*amt, cB[0]*0.4,cB[1]*0.45,cB[2]*0.55); }
+    } else if(amb===4){ // CORRIENTES — flujo fbm tipo río
+      var a1=Math.sin(T*0.5)*3.14; splat(Math.random(),Math.random(), Math.cos(a1)*P.fForce*amt, Math.sin(a1)*P.fForce*amt, cB[0]*0.3,cB[1]*0.3,cB[2]*0.4);
+    } else if(amb===5){ // ONDAS — anillos concéntricos periódicos desde el centro
+      if(Math.floor(T*1.5)!==Math.floor((T-dt)*1.5)) ring(0.5,0.5,1,P.fForce*amt*2.0,[cB[0]*0.5,cB[1]*0.5,cB[2]*0.6]);
+    } else if(amb===6){ // VÓRTICE — remolino permanente alrededor del centro
+      var N=10; for(var k=0;k<N;k++){ var aa=T*2.0+k/N*6.2832; var ox=Math.cos(aa),oy=Math.sin(aa); splat(0.5+ox*0.25,0.5+oy*0.25, -oy*P.fForce*amt*1.5, ox*P.fForce*amt*1.5, cB[0]*0.3,cB[1]*0.35,cB[2]*0.45); }
+    } else if(amb===7){ // CAOS — todo a la vez, suave
+      if(Math.random()<0.4){ splat(Math.random(),Math.random(),(Math.random()-0.5)*P.fForce*amt*2,(Math.random()-0.5)*P.fForce*amt*2, cB[0]*0.4,cB[1]*0.4,cB[2]*0.5); }
+    }
+
+    var vt=velocity.read.texel;
+    // curl
+    gl.useProgram(pCurl); bindQuad(pCurl);
+    gl.uniform2f(u(pCurl,'texel'),vt[0],vt[1]);
+    gl.uniform1i(u(pCurl,'uVel'),tex(0,velocity.read.tex)); draw(curlFBO);
+    // vorticity
+    gl.useProgram(pVort); bindQuad(pVort);
+    gl.uniform2f(u(pVort,'texel'),vt[0],vt[1]);
+    gl.uniform1i(u(pVort,'uVel'),tex(0,velocity.read.tex));
+    gl.uniform1i(u(pVort,'uCurl'),tex(1,curlFBO.tex));
+    gl.uniform1f(u(pVort,'curl'),P.fCurl);
+    gl.uniform1f(u(pVort,'dt'),dt); draw(velocity.write); velocity.swap();
+    // divergence
+    gl.useProgram(pDiv); bindQuad(pDiv);
+    gl.uniform2f(u(pDiv,'texel'),vt[0],vt[1]);
+    gl.uniform1i(u(pDiv,'uVel'),tex(0,velocity.read.tex)); draw(divergence);
+    // clear pressure a bit (decay) then Jacobi iterations
+    gl.useProgram(pPres); bindQuad(pPres);
+    gl.uniform2f(u(pPres,'texel'),vt[0],vt[1]);
+    gl.uniform1i(u(pPres,'uDiv'),tex(1,divergence.tex));
+    for(var i=0;i<P.fIter;i++){
+      gl.uniform1i(u(pPres,'uPres'),tex(0,pressure.read.tex));
+      draw(pressure.write); pressure.swap();
+    }
+    // subtract gradient
+    gl.useProgram(pGrad); bindQuad(pGrad);
+    gl.uniform2f(u(pGrad,'texel'),vt[0],vt[1]);
+    gl.uniform1i(u(pGrad,'uPres'),tex(0,pressure.read.tex));
+    gl.uniform1i(u(pGrad,'uVel'),tex(1,velocity.read.tex)); draw(velocity.write); velocity.swap();
+    // OBSTACLE/confinement: only for obstacle mode. Glass lets velocity flow free.
+    var useMask=P.obstacle?1.0:0.0;
+    if(useMask>0.5){
+      gl.useProgram(pObstacle); bindQuad(pObstacle);
+      gl.uniform2f(u(pObstacle,'texel'),vt[0],vt[1]);
+      gl.uniform1i(u(pObstacle,'uVel'),tex(0,velocity.read.tex));
+      gl.uniform1i(u(pObstacle,'uMask'),tex(1,logoTex));
+      gl.uniform1f(u(pObstacle,'useMask'),useMask);
+      draw(velocity.write); velocity.swap();
+    }
+    // advect velocity
+    gl.useProgram(pAdvect); bindQuad(pAdvect);
+    gl.uniform2f(u(pAdvect,'texel'),vt[0],vt[1]);
+    gl.uniform1i(u(pAdvect,'uVel'),tex(0,velocity.read.tex));
+    gl.uniform1i(u(pAdvect,'uSrc'),tex(0,velocity.read.tex));
+    gl.uniform1i(u(pAdvect,'uMask'),tex(2,logoTex));
+    gl.uniform1f(u(pAdvect,'useMask'),useMask);
+    gl.uniform1f(u(pAdvect,'dt'),dt);
+    gl.uniform1f(u(pAdvect,'diss'),P.fVelDiss); draw(velocity.write); velocity.swap();
+    // advect dye
+    gl.uniform2f(u(pAdvect,'texel'),vt[0],vt[1]);
+    gl.uniform1i(u(pAdvect,'uVel'),tex(0,velocity.read.tex));
+    gl.uniform1i(u(pAdvect,'uSrc'),tex(1,dye.read.tex));
+    gl.uniform1i(u(pAdvect,'uMask'),tex(2,logoTex));
+    gl.uniform1f(u(pAdvect,'useMask'),useMask);
+    gl.uniform1f(u(pAdvect,'diss'),P.fDyeDiss); draw(dye.write); dye.swap();
+
+    // ---------- display to screen ----------
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    gl.viewport(0,0,canvas.width,canvas.height);
+    gl.useProgram(pDisplay); bindQuad(pDisplay);
+    gl.uniform2f(u(pDisplay,'texel'),velocity.read.texel[0],velocity.read.texel[1]);
+    gl.uniform1i(u(pDisplay,'uDye'),tex(0,dye.read.tex));
+    gl.uniform1i(u(pDisplay,'uLogo'),tex(1,logoTex));
+    gl.uniform1i(u(pDisplay,'uVel'),tex(2,velocity.read.tex));
+    gl.uniform1f(u(pDisplay,'uDistort'),P.fDistort);
+    gl.uniform1f(u(pDisplay,'ready'),heroReady?1.0:0.0);
+    gl.uniform1f(u(pDisplay,'uInk'),P.inkMode?1.0:0.0);
+    gl.uniform1f(u(pDisplay,'uLogoVis'),P.logoVis);
+    gl.uniform1f(u(pDisplay,'uFill'),P.fill);
+    gl.uniform1f(u(pDisplay,'uObstacle'),P.obstacle?1.0:0.0);
+    gl.uniform1f(u(pDisplay,'uGlass'),P.glass?1.0:0.0);
+    gl.uniform1f(u(pDisplay,'uTime'),T);
+    gl.uniform1f(u(pDisplay,'uEdgeInk'),P.edgeInk);
+    gl.uniform3fv(u(pDisplay,'uColA'),P.colA);
+    gl.uniform3fv(u(pDisplay,'uColB'),P.colB);
+    draw({fbo:null,w:canvas.width,h:canvas.height});
+    requestAnimationFrame(step);
+  }
+  var baked=false;
+  requestAnimationFrame(step);
+})();
+
+
+
+
+// ═══════════════════════════════════════════════════════
+// LAB 05 — SHAPE MORPHING METABALLS
+// Same chromatic-layer structure as the manifesto, but each
+// "ball" is a rectangular element whose clip-path changes
+// periodically between circle, rounded square, triangle,
+// hexagon, pentagon, diamond, octagon. The SVG metaball
+// filter fuses them regardless of shape.
+// ═══════════════════════════════════════════════════════
+(function() {
+  var stage = document.getElementById('shapes-stage');
+  var layerC = document.getElementById('shapes-cyan');
+  var knockout = document.getElementById('manifesto-knockout');
+  var maskCanvas = document.createElement('canvas');
+  var maskCtx = maskCanvas.getContext('2d');
+  var layerM = document.getElementById('shapes-magenta');
+  var layerB = document.getElementById('shapes-black');
+  if (!stage || !layerC || !layerM || !layerB) return;
+
+  // Catalog of clip-paths. All normalized to fill the element.
+  var SHAPES = {
+    circle:   'circle(50% at 50% 50%)',
+    square:   'polygon(10% 0%, 90% 0%, 100% 10%, 100% 90%, 90% 100%, 10% 100%, 0% 90%, 0% 10%)', // rounded-ish square via octagon
+    triangle: 'polygon(50% 5%, 95% 95%, 5% 95%)',
+    hexagon:  'polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%)',
+    pentagon: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+    diamond:  'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+    octagon:  'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
+    blob:     'circle(50% at 50% 50%)' // same as circle but labeled separately for variation
+  };
+  var SHAPE_KEYS = Object.keys(SHAPES);
+
+  var balls = [];
+  var time = 0;
+  var W = 0, H = 0;
+
+  function setup() {
+    var rect = stage.getBoundingClientRect();
+    W = rect.width;
+    H = rect.height;
+    layerC.innerHTML = '';
+    layerM.innerHTML = '';
+    layerB.innerHTML = '';
+    balls = [];
+
+    var configs = [
+      { hx: 0.15, hy: 0.30, r: 300, ax: 60, ay: 40, ab: 0.0 },
+      { hx: 0.42, hy: 0.20, r: 350, ax: 50, ay: 50, ab: 0.25 },
+      { hx: 0.75, hy: 0.28, r: 310, ax: 55, ay: 45, ab: 0.5 },
+      { hx: 0.25, hy: 0.72, r: 325, ax: 65, ay: 40, ab: 0.15 },
+      { hx: 0.55, hy: 0.78, r: 310, ax: 55, ay: 55, ab: 0.75 },
+      { hx: 0.82, hy: 0.70, r: 340, ax: 50, ay: 50, ab: 0.4 },
+      { hx: 0.50, hy: 0.50, r: 270, ax: 80, ay: 50, ab: 1.0 }
+    ];
+
+    for (var i = 0; i < configs.length; i++) {
+      var c = configs[i];
+      var hx = c.hx * W;
+      var hy = c.hy * H;
+      // Start each ball with a different shape
+      var startShape = SHAPE_KEYS[i % SHAPE_KEYS.length];
+
+      function makeEl(layer, scale) {
+        scale = scale || 1;
+        var r = c.r * scale;
+        var el = document.createElement('div');
+        el.className = 'sh';
+        el.style.width = r + 'px';
+        el.style.height = r + 'px';
+        el.style.left = (hx - r / 2) + 'px';
+        el.style.top = (hy - r / 2) + 'px';
+        el.style.clipPath = SHAPES[startShape];
+        layer.appendChild(el);
+        return el;
+      }
+
+      balls.push({
+        el_c: makeEl(layerC, 0.68),
+        el_m: makeEl(layerM, 0.68),
+        el_b: makeEl(layerB, 1.0),
+        r: c.r,
+        hx: hx, hy: hy,
+        x: hx, y: hy,
+        ab: c.ab,
+        shape: startShape,
+        nextMorph: time + 1.5 + Math.random() * 2.5,
+        phase: Math.random() * Math.PI * 2,
+        phase2: Math.random() * Math.PI * 2,
+        freq: 0.2 + Math.random() * 0.25,
+        freq2: 0.12 + Math.random() * 0.15,
+        ampX: c.ax, ampY: c.ay,
+        // Each ball rotates slowly too — gives the shapes character
+        rot: Math.random() * 360,
+        rotSpeed: (Math.random() - 0.5) * 0.25
+      });
+    }
+  }
+
+  var rt;
+  window.addEventListener('resize', function() {
+    clearTimeout(rt);
+    rt = setTimeout(setup, 200);
+  });
+
+  // Cursor tracking
+  var mouse = { x: -9999, y: -9999, active: false };
+  var hover = 0;
+
+  stage.addEventListener('mousemove', function(e) {
+    var rect = stage.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+    mouse.active = true;
+  });
+  stage.addEventListener('mouseleave', function() {
+    mouse.active = false;
+    mouse.x = -9999; mouse.y = -9999;
+  });
+  stage.addEventListener('touchmove', function(e) {
+    var rect = stage.getBoundingClientRect();
+    mouse.x = e.touches[0].clientX - rect.left;
+    mouse.y = e.touches[0].clientY - rect.top;
+    mouse.active = true;
+  }, { passive: true });
+
+  // Magnetic attraction — all balls follow the cursor
+  var ATTRACT_RADIUS = 1400;
+  var ATTRACT_STRENGTH = 0.7;
+
+  // Velocity state for spring physics
+  function ensureVel(b) { if (b.vx === undefined) { b.vx = 0; b.vy = 0; } }
+
+  function pickNewShape(current) {
+    var next = SHAPE_KEYS[Math.floor(Math.random() * SHAPE_KEYS.length)];
+    if (next === current) next = SHAPE_KEYS[(SHAPE_KEYS.indexOf(current) + 1) % SHAPE_KEYS.length];
+    return next;
+  }
+
+  function loop() {
+    if (!balls.length) { setup(); requestAnimationFrame(loop); return; }
+    time += 0.014;
+
+    // Hover ramp — fast in, slow out
+    var targetHover = mouse.active ? 1 : 0;
+    var lerpRate = mouse.active ? 0.10 : 0.035;
+    hover += (targetHover - hover) * lerpRate;
+
+    var blur = 3 + hover * 4;
+    layerC.style.setProperty('--shapes-blur', blur + 'px');
+    layerM.style.setProperty('--shapes-blur', blur + 'px');
+    layerB.style.setProperty('--shapes-blur', (blur * 0.7) + 'px');
+
+    for (var i = 0; i < balls.length; i++) {
+      var b = balls[i];
+      ensureVel(b);
+
+      // Periodic shape morph
+      if (time >= b.nextMorph) {
+        var newShape = pickNewShape(b.shape);
+        b.shape = newShape;
+        b.el_c.style.clipPath = SHAPES[newShape];
+        b.el_m.style.clipPath = SHAPES[newShape];
+        b.el_b.style.clipPath = SHAPES[newShape];
+        b.nextMorph = time + 1.8 + Math.random() * 3.0;
+      }
+
+      b.rot += b.rotSpeed;
+
+      // Ambient motion
+      var ambX = Math.sin(time * b.freq + b.phase) * b.ampX
+               + Math.sin(time * b.freq2 + b.phase2) * b.ampX * 0.4;
+      var ambY = Math.cos(time * b.freq * 0.85 + b.phase * 1.3) * b.ampY
+               + Math.cos(time * b.freq2 * 1.1 + b.phase2 * 0.7) * b.ampY * 0.4;
+
+      var targetX = b.hx + ambX;
+      var targetY = b.hy + ambY;
+
+      // Cursor attraction (only when hovering)
+      if (hover > 0.01) {
+        var dxC = mouse.x - targetX;
+        var dyC = mouse.y - targetY;
+        var distC = Math.sqrt(dxC * dxC + dyC * dyC);
+        if (distC < ATTRACT_RADIUS) {
+          var pull = 1 - distC / ATTRACT_RADIUS;
+          pull = pull * pull;
+          var force = pull * ATTRACT_STRENGTH * hover;
+          targetX += dxC * force;
+          targetY += dyC * force;
+        }
+      }
+
+      // Spring + damping
+      b.vx += (targetX - b.x) * 0.08;
+      b.vy += (targetY - b.y) * 0.08;
+      b.vx *= 0.86;
+      b.vy *= 0.86;
+      b.x += b.vx;
+      b.y += b.vy;
+
+      var dxv = b.x - b.hx;
+      var dyv = b.y - b.hy;
+
+      // EDGE-ONLY chromatic aberration:
+      // Since cyan/magenta layers are 68% of the black size, shifting
+      // them by ~30% of the radius means they only peek OUT the sides
+      // (left/right) of the larger black mass — never overlap the
+      // black center. This produces clean cyan/magenta halos at the
+      // edges without the muddy red/green tints in the dark interior.
+      // Per-ball ab intensity controls how far each one peeks.
+      // Hover globally amplifies it.
+      var ab = (15 + b.ab * 35) * (0.5 + hover * 0.7);
+
+      b.el_c.style.transform = 'translate(' + (dxv - ab).toFixed(1) + 'px,' + dyv.toFixed(1) + 'px) rotate(' + b.rot.toFixed(1) + 'deg)';
+      b.el_m.style.transform = 'translate(' + (dxv + ab).toFixed(1) + 'px,' + dyv.toFixed(1) + 'px) rotate(' + b.rot.toFixed(1) + 'deg)';
+      b.el_b.style.transform = 'translate(' + dxv.toFixed(1) + 'px,' + dyv.toFixed(1) + 'px) rotate(' + b.rot.toFixed(1) + 'deg)';
+    }
+
+    updateKnockoutMask();
+
+    requestAnimationFrame(loop);
+  }
+
+  // Parse a clip-path string (circle()/polygon() with %s) into a canvas
+  // path drawn inside a box [0..size], so the mask matches the REAL blue
+  // shape exactly — no phantom white sphere from mismatched circles.
+  function pathFromClip(cx2, clip, cx, cy, size, rotDeg){
+    var half = size/2;
+    cx2.save();
+    cx2.translate(cx, cy);
+    cx2.rotate(rotDeg*Math.PI/180);
+    cx2.beginPath();
+    if(clip.indexOf('circle')===0){
+      cx2.arc(0, 0, half, 0, Math.PI*2);
+    } else {
+      var inside = clip.substring(clip.indexOf('(')+1, clip.lastIndexOf(')'));
+      var pts = inside.split(',');
+      for(var i=0;i<pts.length;i++){
+        var xy = pts[i].trim().split(/\s+/);
+        var px = (parseFloat(xy[0])/100)*size - half;
+        var py = (parseFloat(xy[1])/100)*size - half;
+        if(i===0) cx2.moveTo(px,py); else cx2.lineTo(px,py);
+      }
+      cx2.closePath();
+    }
+    cx2.fill();
+    cx2.restore();
+  }
+
+  // Paint the REAL blue shapes into a mask canvas so the WHITE knockout
+  // text shows ONLY inside them. Blur + hard threshold fuses them like the
+  // metaball and gives clean edges (no soft halo, no phantom sphere).
+  var maskFrame = 0;
+  function updateKnockoutMask(){
+    if(!knockout || !stage) return;
+    maskFrame++;
+    if(maskFrame % 2 !== 0) return;          // throttle: every other frame
+    var kw = knockout.clientWidth, kh = knockout.clientHeight;
+    if(kw<=0||kh<=0) return;
+    var SC = 0.5;                            // half-res mask for speed
+    var MW = Math.round(kw*SC), MH = Math.round(kh*SC);
+    if(maskCanvas.width!==MW || maskCanvas.height!==MH){ maskCanvas.width=MW; maskCanvas.height=MH; }
+    var sRect = stage.getBoundingClientRect();
+    var kRect = knockout.getBoundingClientRect();
+    var ox = (sRect.left - kRect.left)*SC;
+    var oy = (sRect.top - kRect.top)*SC;
+
+    maskCtx.clearRect(0,0,MW,MH);
+    maskCtx.fillStyle = '#fff';
+    maskCtx.filter = 'blur('+(6*SC)+'px)';   // soften to metaball-ish
+    for(var i=0;i<balls.length;i++){
+      var b=balls[i];
+      var cxp = ox + b.x*SC;
+      var cyp = oy + b.y*SC;
+      var size = (b.r || 300) * SC;
+      pathFromClip(maskCtx, SHAPES[b.shape]||'circle()', cxp, cyp, size, b.rot);
+    }
+    maskCtx.filter = 'none';
+    // hard threshold: fuse into solid mask, kill soft-edge phantom whites
+    var img = maskCtx.getImageData(0,0,MW,MH);
+    var d = img.data;
+    for(var p=3;p<d.length;p+=4){ d[p] = d[p] > 90 ? 255 : 0; }
+    maskCtx.putImageData(img,0,0);
+
+    var url = maskCanvas.toDataURL();
+    knockout.style.webkitMaskImage = 'url('+url+')';
+    knockout.style.maskImage = 'url('+url+')';
+  }
+
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function() { setup(); requestAnimationFrame(loop); });
+  else { setup(); requestAnimationFrame(loop); }
+})();
+
+
+// ═══════════════════════════════════════════════════════
+// SECTION 3 — DIRECTOR ROSTER · floating VIDEO preview + portfolio overlay
+//  • hover a name  → its clip plays in a floating preview that
+//    trails the cursor (lerp), same as before but with real video
+//  • click a name  → opens a floating portfolio panel (reel + thumbs)
+//    over the page; closes with ✕, backdrop, or Esc.
+// Preview/overlay videos reuse the scroll-stage clip sources
+// (same decoded data-URI already in memory — no extra files).
+// ═══════════════════════════════════════════════════════
+(function() {
+  var container = document.getElementById('projects-container');
+  if (!container) return;
+
+  var imgs  = Array.prototype.slice.call(container.querySelectorAll('.floating-img'));
+  var items = Array.prototype.slice.call(container.querySelectorAll('[data-img]'));
+  if (!imgs.length || !items.length) return;
+
+  // pull the clip <video> sources from the scroll-stage so previews
+  // can mount their own lightweight video instances on the same data.
+  var NAMES = ['Adrian','Cris','Fusco','Jafet','Jayson'];
+  function clipSrc(n){
+    var v = document.getElementById('clip'+n);
+    return v ? (v.currentSrc || v.getAttribute('src') || '') : '';
+  }
+  function makeVideo(src){
+    var v = document.createElement('video');
+    v.muted = true; v.loop = true; v.playsInline = true;
+    v.setAttribute('muted',''); v.setAttribute('playsinline','');
+    v.preload = 'metadata';
+    if(src) v.src = src;
+    return v;
+  }
+
+  // roster metadata (kept in sync with the markup's data-clip)
+  var META = {
+    '1': {name:'Adrian',  role:'Director',        clip:0, year:'2024'},
+    '2': {name:'Cris',    role:'Cinematographer', clip:1, year:'2023'},
+    '3': {name:'Fusco',   role:'Colorist',        clip:2, year:'2023'},
+    '4': {name:'Jafet',   role:'Editor',          clip:3, year:'2022'},
+    '5': {name:'Jayson',  role:'Director',        clip:4, year:'2022'},
+    '6': {name:'Nairobi', role:'Colorist',        clip:5, year:'2021'}
+  };
+
+  // mount a preview video inside each floating-img
+  imgs.forEach(function(img){
+    var clip = parseInt(img.dataset.clip||'0',10);
+    var v = makeVideo(clipSrc(clip));
+    img.appendChild(v);
+    var tag = document.createElement('div');
+    tag.className = 'fi-tag';
+    var m = META[img.dataset.i];
+    tag.textContent = (m ? m.name : '') + ' · Reel';
+    img.appendChild(tag);
+    img._vid = v;
+  });
+
+  var mx = 0, my = 0;
+  var positions = {};
+
+  function initPositions() {
+    var rect = container.getBoundingClientRect();
+    var cx = rect.width / 2;
+    var cy = rect.height / 2;
+    mx = cx; my = cy;
+    imgs.forEach(function(img) {
+      positions[img.dataset.i] = { x: cx, y: cy };
+      img.style.left = cx + 'px';
+      img.style.top = cy + 'px';
+    });
+  }
+
+  container.addEventListener('mousemove', function(e) {
+    var r = container.getBoundingClientRect();
+    mx = e.clientX - r.left;
+    my = e.clientY - r.top;
+  });
+
+  items.forEach(function(item) {
+    item.addEventListener('mouseenter', function() {
+      var img = container.querySelector('.floating-img[data-i="' + item.dataset.img + '"]');
+      if (img){ img.classList.add('show'); if(img._vid){ img._vid.currentTime=0; img._vid.play().catch(function(){}); } }
+    });
+    item.addEventListener('mouseleave', function() {
+      var img = container.querySelector('.floating-img[data-i="' + item.dataset.img + '"]');
+      if (img){ img.classList.remove('show'); if(img._vid){ img._vid.pause(); } }
+    });
+    // CLICK → open the director portfolio overlay
+    item.addEventListener('click', function(){ openDir(item.dataset.img); });
+  });
+
+  function animate() {
+    imgs.forEach(function(img) {
+      var p = positions[img.dataset.i];
+      if (!p) return;
+      p.x += (mx - p.x) * 0.15;
+      p.y += (my - p.y) * 0.15;
+      img.style.left = p.x + 'px';
+      img.style.top = p.y + 'px';
+    });
+    requestAnimationFrame(animate);
+  }
+
+  initPositions();
+  animate();
+  window.addEventListener('resize', initPositions);
+
+  // ─────────────────────────────────────────────────────
+  // PORTFOLIO OVERLAY
+  // ─────────────────────────────────────────────────────
+  var overlay = document.getElementById('dirOverlay');
+  var elName  = document.getElementById('dirName');
+  var elRole  = document.getElementById('dirRole');
+  var elHero  = document.getElementById('dirHero');
+  var elHeroCap = document.getElementById('dirHeroCap');
+  var elGrid  = document.getElementById('dirGrid');
+  var elClose = document.getElementById('dirClose');
+  var elNav   = document.getElementById('dirNav');
+  var heroVid = null;
+  var thumbVids = [];
+
+  // build the director switcher tabs once (order follows META keys)
+  var NAV_IDS = ['1','2','3','4','5','6'];
+  var navTabs = {};
+  if(elNav){
+    NAV_IDS.forEach(function(id){
+      var m = META[id];
+      if(!m) return;
+      var b = document.createElement('button');
+      b.className = 'dir-tab';
+      b.type = 'button';
+      b.textContent = m.name;
+      b.addEventListener('click', function(){ openDir(id); });
+      elNav.appendChild(b);
+      navTabs[id] = b;
+    });
+  }
+  function setActiveTab(id){
+    for(var k in navTabs){ if(navTabs.hasOwnProperty(k)){ navTabs[k].classList.toggle('active', k===id); } }
+  }
+  // which director "owns" a given clip index (for thumbnail → title sync)
+  function ownerOfClip(ci){
+    for(var k in META){
+      if(META.hasOwnProperty(k) && META[k].clip===ci){ return {id:k, name:META[k].name, role:META[k].role}; }
+    }
+    return null;
+  }
+
+  function clearHero(){
+    if(heroVid){ try{heroVid.pause();}catch(e){} if(heroVid.parentNode) heroVid.parentNode.removeChild(heroVid); heroVid=null; }
+  }
+  function clearThumbs(){
+    thumbVids.forEach(function(v){ try{v.pause();}catch(e){} });
+    thumbVids = [];
+    elGrid.innerHTML = '';
+  }
+
+  function openDir(id){
+    var m = META[id];
+    if(!m || !overlay) return;
+    elName.textContent = m.name;
+    elRole.textContent = m.role;
+    setActiveTab(id);
+
+    // big reel = this director's clip
+    clearHero();
+    heroVid = makeVideo(clipSrc(m.clip));
+    heroVid.autoplay = true;
+    elHero.insertBefore(heroVid, elHeroCap);
+    elHeroCap.textContent = m.name + ' · Reel · ' + m.year;
+    heroVid.play().catch(function(){});
+
+    // thumbnail gallery — for now, the full clip set as the director's
+    // selected pieces (placeholder content you can swap per-director later)
+    clearThumbs();
+    for(var i=0;i<5;i++){
+      (function(ci){
+        var cell = document.createElement('div');
+        cell.className = 'dir-thumb';
+        var tv = makeVideo(clipSrc(ci));
+        cell.appendChild(tv);
+        var cap = document.createElement('div');
+        cap.className = 'dir-thumb-cap';
+        cap.textContent = NAMES[ci] + ' · 0'+(ci+1);
+        cell.appendChild(cap);
+        // hover a thumb → preview it; click → promote to hero
+        cell.addEventListener('mouseenter', function(){ tv.currentTime=0; tv.play().catch(function(){}); });
+        cell.addEventListener('mouseleave', function(){ tv.pause(); });
+        cell.addEventListener('click', function(){
+          clearHero();
+          heroVid = makeVideo(clipSrc(ci));
+          heroVid.autoplay = true;
+          elHero.insertBefore(heroVid, elHeroCap);
+          // update the big title to the director who owns this clip
+          var owner = ownerOfClip(ci);
+          if(owner){
+            elName.textContent = owner.name;
+            elRole.textContent = owner.role;
+            setActiveTab(owner.id);
+          }
+          elHeroCap.textContent = NAMES[ci] + ' · 0'+(ci+1);
+          heroVid.play().catch(function(){});
+        });
+        thumbVids.push(tv);
+        elGrid.appendChild(cell);
+      })(i);
+    }
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden','false');
+    document.body.style.overflow = 'hidden';   // lock page scroll while open
+  }
+
+  function closeDir(){
+    if(!overlay) return;
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden','true');
+    document.body.style.overflow = '';
+    // tidy up after the fade so nothing keeps decoding in the background
+    setTimeout(function(){ clearHero(); clearThumbs(); }, 480);
+  }
+
+  if(elClose) elClose.addEventListener('click', closeDir);
+  if(overlay) overlay.addEventListener('click', function(e){ if(e.target===overlay) closeDir(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' || e.keyCode===27) closeDir(); });
+})();
+
+</script>
+
+<script>
+// ── MANIFESTO: auto-play lines one by one when the section enters view ──
+(function(){
+  var sec=document.getElementById('section-shapes');
+  var lines=Array.prototype.slice.call(document.querySelectorAll('#manifesto .manifesto-line'));
+  var klines=Array.prototype.slice.call(document.querySelectorAll('#manifesto-knockout .manifesto-line'));
+  if(!sec||!lines.length) return;
+
+  // apply .on to base line AND its knockout twin (same index)
+  function setOn(i, on){
+    if(lines[i]) lines[i].classList.toggle('on', on);
+    if(klines[i]) klines[i].classList.toggle('on', on);
+  }
+
+  var STEP=650;        // ms between each line appearing
+  var START_DELAY=500; // ms after section appears before the first line
+  var timers=[];
+  var playing=false;
+
+  function clearTimers(){ timers.forEach(clearTimeout); timers=[]; }
+  function reset(){ clearTimers(); playing=false; lines.forEach(function(el,i){setOn(i,false);}); }
+  function play(){
+    if(playing) return;
+    playing=true;
+    clearTimers();
+    lines.forEach(function(el,i){setOn(i,false);});
+    lines.forEach(function(el,i){
+      timers.push(setTimeout(function(){ setOn(i,true); }, START_DELAY + i*STEP));
+    });
+  }
+
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      // trigger once a good chunk of the section is on screen
+      if(e.isIntersecting && e.intersectionRatio>0.35){ play(); }
+      else if(!e.isIntersecting){ reset(); }   // re-arm when it leaves, replays on return
+    });
+  }, { threshold:[0,0.35,0.6] });
+  io.observe(sec);
+})();
+</script>
+
+
+<script>
+// ── CTA BUTTON: subtle pixels that bleed out near the cursor ──
+(function(){
+  var btn=document.getElementById('ctaBtn');
+  var cv=document.getElementById('ctaPix');
+  if(!btn||!cv) return;
+  var ctx=cv.getContext('2d');
+  var CELL=11, PAD=28;          // PAD matches the canvas offset in CSS
+  var BLEED=16;                // how far outside the button pixels may appear
+  var RADIUS=64;               // cursor influence radius
+  var cols=0,rows=0,cells=[];
+  var bx0=0,by0=0,bx1=0,by1=0;
+  function build(){
+    var r=btn.getBoundingClientRect();
+    cv.width=Math.ceil(r.width+PAD*2);
+    cv.height=Math.ceil(r.height+PAD*2);
+    cols=Math.ceil(cv.width/CELL); rows=Math.ceil(cv.height/CELL);
+    bx0=PAD; by0=PAD; bx1=PAD+r.width; by1=PAD+r.height;
+    cells=[];
+    for(var ry=0;ry<rows;ry++){
+      for(var rx=0;rx<cols;rx++){
+        var px=rx*CELL, py=ry*CELL;
+        // distance outside the button edge
+        var dx = px<bx0 ? bx0-px : (px>bx1 ? px-bx1 : 0);
+        var dy = py<by0 ? by0-py : (py>by1 ? py-by1 : 0);
+        var dEdge = Math.sqrt(dx*dx+dy*dy);
+        // keep only a thin band just outside the button
+        if(dEdge>0 && dEdge<=BLEED){
+          cells.push({x:px,y:py,cx:px+CELL/2,cy:py+CELL/2,dEdge:dEdge,j:Math.random()});
+        }
+      }
+    }
+  }
+  var hover=0,htarget=0, mx=-999,my=-999, raf=null;
+  function render(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.fillStyle='#ffffff';
+    for(var i=0;i<cells.length;i++){
+      var c=cells[i];
+      var dm=Math.sqrt((c.cx-mx)*(c.cx-mx)+(c.cy-my)*(c.cy-my));
+      if(dm>RADIUS) continue;
+      var near=1-(dm/RADIUS);                 // 1 at cursor → 0 at radius edge
+      var edge=1-(c.dEdge/BLEED);             // 1 at button edge → 0 at bleed limit
+      var p=near*edge*hover;                  // combined, gated by hover ramp
+      if(p>0.12 && c.j < p*1.25){             // sparse, subtle
+        ctx.globalAlpha=Math.min(0.85, p);
+        ctx.fillRect(c.x,c.y,CELL,CELL);
+      }
+    }
+    ctx.globalAlpha=1;
+  }
+  function tick(){
+    hover += (htarget-hover)*0.12;
+    render();
+    if(hover>0.01 || htarget>0){ raf=requestAnimationFrame(tick); }
+    else { hover=0; ctx.clearRect(0,0,cv.width,cv.height); raf=null; }
+  }
+  function go(){ if(!raf) raf=requestAnimationFrame(tick); }
+  btn.addEventListener('mouseenter',function(){ build(); htarget=1; go(); });
+  btn.addEventListener('mouseleave',function(){ htarget=0; mx=-999; my=-999; go(); });
+  btn.addEventListener('mousemove',function(e){
+    var r=btn.getBoundingClientRect();
+    mx=(e.clientX-r.left)+PAD;
+    my=(e.clientY-r.top)+PAD;
+  });
+  window.addEventListener('resize',build); build();
+})();
+</script>
+
+
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   SCROLL-VIDEO STAGE
+   - 5 clips advance one-after-another as the user scrolls
+   - reversible (scroll up = previous clip)
+   - clip→clip transitions dissolve with an ORGANIC pixel+ink
+     edge (no straight white line)
+   ═══════════════════════════════════════════════════════════ */
+(function(){
+  var stage   = document.getElementById('scrollStage');
+  var stick   = stage ? stage.querySelector('.vstick') : null;
+  var canvas  = document.getElementById('vCanvas');
+  var capEl   = document.getElementById('vCaption');
+  var cntEl   = document.getElementById('vCount');
+  if(!stage||!canvas) return;
+  var ctx = canvas.getContext('2d');
+
+  var NAMES = ['Adrian','Cris','Fusco','Jafet','Jayson'];
+  var vids = [];
+  for(var i=0;i<5;i++){ vids.push(document.getElementById('clip'+i)); }
+  var N = vids.length;
+
+  // hero layer that we dissolve into clip0 on the way in
+  var heroLayer  = document.getElementById('heroLayer');
+  var heroCanvas = document.getElementById('heroParticles');
+
+  // fraction of each clip's scroll-span spent transitioning into the next
+  var TRANS = 0.34;
+
+  // --- offscreen buffer for compositing the two frames ---
+  var buf = document.createElement('canvas');
+  var bctx = buf.getContext('2d');
+
+  var DPR = Math.min(window.devicePixelRatio||1, 2);
+  function resize(){
+    var w = stick.clientWidth, h = stick.clientHeight;
+    canvas.width = Math.round(w*DPR); canvas.height = Math.round(h*DPR);
+    canvas.style.width=w+'px'; canvas.style.height=h+'px';
+    buf.width = canvas.width; buf.height = canvas.height;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // draw a video as cover (fill canvas, preserve aspect, center-crop)
+  // draw a video as cover (fill canvas, preserve aspect, center-crop).
+  // ZOOM (>1) scales the frame up a touch so clips read bigger/fuller
+  // without distortion — extra is cropped evenly at the edges.
+  var COVER_ZOOM = 1.18;
+  function drawCover(c, v){
+    var cw=c.canvas.width, ch=c.canvas.height;
+    var vw=v.videoWidth||16, vh=v.videoHeight||9;
+    // per-clip extra zoom (e.g. clips with baked-in black bars) via data-zoom
+    var extra = parseFloat(v && v.getAttribute ? (v.getAttribute('data-zoom')||'1') : '1') || 1;
+    var s=Math.max(cw/vw, ch/vh) * COVER_ZOOM * extra;
+    var dw=vw*s, dh=vh*s;
+    var dx=(cw-dw)/2, dy=(ch-dh)/2;
+    try{ c.drawImage(v, dx,dy,dw,dh); }catch(e){}
+  }
+
+  // pseudo-random but stable per-cell value
+  function rnd(x,y){
+    var n = Math.sin(x*12.9898 + y*78.233) * 43758.5453;
+    return n - Math.floor(n);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // WATER TRANSITION (v2) — clip → clip as liquid, drop-in-water.
+  // Concentric ripples expand from the CENTER (like something dropped
+  // in water): a radial reveal front + concentric wave displacement,
+  // strongest at the ripple ring. Canvas-2D sampling by STEP blocks.
+  // progress 0..1 : how far the NEW clip has taken over.
+  // ═══════════════════════════════════════════════════════
+  var waterT = 0;                    // animated clock so the water is alive
+
+  // Core radial-ripple compositor. old/new are ImageData.data arrays
+  // (or null for a solid color given by newColor[3] = flag/rgb).
+  // If newIsWhite is true, the "new" side is solid white instead of nd.
+  // ═══════════════════════════════════════════════════════
+  // WATER RIPPLE transition — concentric drop-in-water waves.
+  // Rings expand from the CENTER: a radial reveal front + concentric
+  // wave displacement, strongest at the expanding ring (the splash).
+  // The NEW clip emerges from the center outward.
+  // progress 0..1 : how far the NEW clip has taken over.
+  // soft (0..1): gentler amplitude/wider edge for calmer transitions.
+  // ═══════════════════════════════════════════════════════
+  function waterCaustic(od, nd, progress, newIsWhite, soft){
+    var cw=canvas.width, ch=canvas.height;
+    var out = ctx.createImageData(cw,ch);
+    var o = out.data;
+    if(soft===undefined) soft = 1;
+
+    var cx = cw*0.5, cy = ch*0.5;
+    var maxR = Math.sqrt(cx*cx + cy*cy);              // center → corner
+    var envelope = Math.sin(progress*Math.PI);        // calm at both ends
+
+    var AMP    = (40*DPR) * envelope * soft;          // ripple push (px)
+    var RINGS  = 22;                                  // concentric wave count
+    var STEP   = Math.max(2, Math.round(2*DPR));
+    var band   = (0.16 + (1-soft)*0.14)*maxR + 0.10*maxR*envelope;   // wet edge width
+    var revealR = progress*(maxR + band*2) - band;    // reveal radius grows 0→corner
+
+    function sample(data, sx, sy){
+      if(sx<0) sx=0; else if(sx>=cw) sx=cw-1;
+      if(sy<0) sy=0; else if(sy>=ch) sy=ch-1;
+      return ((sy*cw)+sx)*4;
+    }
+
+    for(var y=0; y<ch; y+=STEP){
+      for(var x=0; x<cw; x+=STEP){
+        var ox = x-cx, oy = y-cy;
+        var dist = Math.sqrt(ox*ox + oy*oy) || 0.0001;
+        var nx = ox/dist, ny = oy/dist;               // radial unit vector
+
+        // concentric wave along the radius, animated outward
+        var phase = (dist/maxR)*RINGS - waterT*1.4;
+        var wave = Math.sin(phase);
+        var ring = 1 - Math.abs(dist - revealR)/(band*1.6);   // near the splash ring
+        if(ring<0) ring=0;
+        var push = AMP * wave * (0.35 + ring*1.3);    // stronger at the ring
+        var exx = nx*push, eyy = ny*push;
+
+        // reveal mask: inside revealR = NEW, outside = OLD, soft across band
+        var edge = dist - revealR;
+        var mix = edge < -band ? 1 : (edge > band ? 0 : (band - edge)/(2*band));
+
+        var so  = sample(od, (x+exx)|0, (y+eyy)|0);
+        var soR = sample(od, (x+exx+ring*3*DPR)|0, (y+eyy)|0);   // chroma split at ring
+
+        var r,g,b;
+        if(newIsWhite){
+          r = od[soR]*(1-mix) + 255*mix;
+          g = od[so+1]*(1-mix) + 255*mix;
+          b = od[so+2]*(1-mix) + 255*mix;
+        } else {
+          var sn = sample(nd, (x+exx*0.6)|0, (y+eyy*0.6)|0);
+          r = od[soR]*(1-mix) + nd[sn]*mix;
+          g = od[so+1]*(1-mix) + nd[sn+1]*mix;
+          b = od[so+2]*(1-mix) + nd[sn+2]*mix;
+          if(mix>0 && nd[sn]+nd[sn+1]+nd[sn+2] < 14){ r=od[so]; g=od[so+1]; b=od[so+2]; }
+        }
+
+        for(var by=0; by<STEP && y+by<ch; by++){
+          var rowBase=((y+by)*cw + x)*4;
+          for(var bx=0; bx<STEP && x+bx<cw; bx++){
+            var oi=rowBase+bx*4;
+            o[oi]=r; o[oi+1]=g; o[oi+2]=b; o[oi+3]=255;
+          }
+        }
+      }
+    }
+    ctx.putImageData(out,0,0);
+  }
+
+  function drawTransition(vOld, vNew, progress){
+    var cw=canvas.width, ch=canvas.height;
+    waterT += 0.05;
+    drawCover(ctx, vOld);
+    bctx.clearRect(0,0,cw,ch); drawCover(bctx, vNew);
+    var neu, old;
+    try{
+      neu = bctx.getImageData(0,0,cw,ch);
+      old = ctx.getImageData(0,0,cw,ch);
+    }catch(e){ if(progress>0.5) drawCover(ctx, vNew); return; }
+    waterCaustic(old.data, neu.data, progress, false);
+  }
+
+  // playback management: only keep the 1-2 active clips playing
+  function setPlaying(activeSet){
+    for(var i=0;i<N;i++){
+      if(activeSet[i]){ if(vids[i].paused){ vids[i].play().catch(function(){}); } }
+      else { if(!vids[i].paused){ vids[i].pause(); } }
+    }
+  }
+
+  // a video is safe to draw once it has enough data and real dimensions
+  function frameReady(v){
+    return v.readyState >= 2 && v.videoWidth > 0;
+  }
+
+  // EXIT dissolve: pixel-dissolve the last clip into white — the Manifesto
+  // section that follows is also white, so the two sections blend through a
+  // scattered-pixel field instead of a hard cut.
+  // EXIT: the last clip simply fades out (canvas opacity) to the white
+  // section behind — a clean, simple fade, no ripple, no blue box.
+  function drawExit(vLast, progress){
+    drawCover(ctx, vLast);
+    // ease-out fade so it dilutes gently into the white section
+    var f = progress<1 ? progress : 1;
+    canvas.style.opacity = String(Math.max(0, 1 - f*f));
+  }
+
+  // ENTER dissolve: the blue hero (logo + ink) scatters away as a
+  // pixel/ink field, revealing clip0 underneath — same organic
+  // dissolve language as the clip→clip and exit transitions, so the
+  // hero flows into the first video with no hard cut.
+  // progress 0..1 : how far clip0 has taken over from the hero.
+  var heroCache = null, heroCacheW = 0, heroCacheH = 0;
+  function captureHero(cw, ch){
+    // snapshot the live hero canvas into an offscreen buffer scaled to
+    // the video canvas, so we can read its pixels and scatter them.
+    if(!heroCanvas) return null;
+    if(!heroCache){ heroCache = document.createElement('canvas'); }
+    if(heroCacheW!==cw || heroCacheH!==ch){ heroCache.width=cw; heroCache.height=ch; heroCacheW=cw; heroCacheH=ch; }
+    var hc = heroCache.getContext('2d');
+    hc.fillStyle = '#ffffff';            // hero background (white, inverted look)
+    hc.fillRect(0,0,cw,ch);
+    try{ hc.drawImage(heroCanvas, 0,0, cw, ch); }catch(e){}
+    try{ return hc.getImageData(0,0,cw,ch); }catch(e){ return null; }
+  }
+  function drawEnter(vNext, progress){
+    var cw=canvas.width, ch=canvas.height;
+    waterT += 0.06;
+    // new = clip0 on visible canvas; old = captured hero frame
+    if(frameReady(vNext)) drawCover(ctx, vNext);
+    else { ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,cw,ch); }
+    var hero = captureHero(cw, ch);
+    if(!hero){ return; }                        // CSS layer fade fallback
+    var neu;
+    try{ neu = ctx.getImageData(0,0,cw,ch); }catch(e){ return; }
+    // old = hero (washes away), new = clip0 emerging from center ripple
+    waterCaustic(hero.data, neu.data, progress, false);
+  }
+
+  var lastIdx=-1;
+  var ENTER = 0.165;  // first chunk of the stage = hero holds, then dissolves into clip0
+  var HERO_HOLD = 0.55; // within ENTER, fraction where hero is fully shown before dissolving
+  var EXIT = 0.20;  // last chunk of the stage = gentle water-dissolve; longer = smoother
+  function render(){
+    var rect = stage.getBoundingClientRect();
+    var total = stage.offsetHeight - stick.clientHeight; // scrollable distance
+    var scrolled = -rect.top;
+    var p = total>0 ? scrolled/total : 0;
+    if(p<0) p=0; if(p>1) p=1;
+
+    // keep canvas fully opaque everywhere except the EXIT fade below
+    if(p <= (1-EXIT) && canvas.style.opacity!=='1'){ canvas.style.opacity='1'; }
+
+    // ── ENTER phase: hero visible, then pixel-dissolves into clip0 ──
+    if(p < ENTER){
+      var gp = p/ENTER;                       // 0..1 across the enter span
+      var active0={}; active0[0]=true; setPlaying(active0);
+      capEl.style.opacity='0'; cntEl.style.opacity='0';
+      if(gp <= HERO_HOLD){
+        // hero fully owns the screen — keep its layer crisp & interactive
+        if(heroLayer){ heroLayer.style.opacity='1'; heroLayer.classList.remove('gone'); }
+        // still paint clip0 underneath so it's warm/decoded for the reveal
+        if(frameReady(vids[0])) drawCover(ctx, vids[0]);
+        else { ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+        return;
+      }
+      // dissolving: fade the real (interactive) hero layer out while the
+      // pixel-scatter of its captured frame reveals clip0 on the canvas
+      var ep = (gp-HERO_HOLD)/(1-HERO_HOLD);  // 0..1 dissolve progress
+      if(heroLayer){ heroLayer.style.opacity = String(Math.max(0, 1-ep*1.25)); heroLayer.classList.add('gone'); }
+      drawEnter(vids[0], ep);
+      return;
+    }
+    if(heroLayer && heroLayer.style.opacity!=='0'){ heroLayer.style.opacity='0'; heroLayer.classList.add('gone'); }
+    capEl.style.opacity=''; cntEl.style.opacity='';
+
+    // remap the post-enter scroll (ENTER..1) onto the clip timeline (0..1)
+    p = (p - ENTER) / (1 - ENTER);
+    if(p<0) p=0; if(p>1) p=1;
+
+    // ── EXIT phase: dissolve last clip → transparent (reveals Manifesto) ──
+    if(p > (1-EXIT)){
+      var ep = (p-(1-EXIT))/EXIT;          // 0..1
+      var active0={}; active0[N-1]=true; setPlaying(active0);
+      if(frameReady(vids[N-1])) drawExit(vids[N-1], ep);
+      else { ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+      capEl.style.opacity = String(Math.max(0, 0.85*(1-ep*1.4)));
+      cntEl.style.opacity = String(Math.max(0, 0.7*(1-ep*1.4)));
+      return;
+    }
+    capEl.style.opacity=''; cntEl.style.opacity='';
+    if(canvas.style.opacity!=='1' && canvas.style.opacity!==''){ canvas.style.opacity='1'; }
+
+    // map the clip span (0 .. 1-EXIT) to N segments
+    var cp = p/(1-EXIT);           // 0..1 across the clips
+    var seg = cp*N;                // 0..N
+    var idx = Math.floor(seg);     // current clip
+    if(idx>=N) idx=N-1;
+    var local = seg - idx;         // 0..1 within this clip's span
+
+    var active={};
+    active[idx]=true;
+    // pre-roll the next clip well before the transition so it has a
+    // decoded frame ready (prevents black flashes during the dissolve)
+    if(idx < N-1 && local > 0.45){ active[idx+1]=true; }
+
+    var inTrans = (local > (1-TRANS) && idx < N-1);
+    setPlaying(active);
+
+    if(inTrans){
+      var tp = (local-(1-TRANS))/TRANS;   // 0..1 transition progress
+      var vNew = vids[idx+1];
+      // only dissolve once the incoming clip actually has a frame
+      if(frameReady(vNew)){
+        drawTransition(vids[idx], vNew, tp);
+      } else {
+        drawCover(ctx, vids[idx]);        // hold old clip until new is ready
+      }
+      capEl.textContent = tp<0.5 ? NAMES[idx] : NAMES[idx+1];
+      var shown = tp<0.5 ? idx+1 : idx+2;
+      cntEl.textContent = ('0'+shown).slice(-2)+' / 0'+N;
+    } else {
+      drawCover(ctx, vids[idx]);
+      capEl.textContent = NAMES[idx];
+      cntEl.textContent = ('0'+(idx+1)).slice(-2)+' / 0'+N;
+    }
+    lastIdx=idx;
+  }
+
+  // only run the heavy render when the stage is on screen
+  var onScreen=false;
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){ onScreen = e.isIntersecting; });
+  }, {threshold:0});
+  io.observe(stick);
+
+  function loop(){
+    if(onScreen){ render(); }
+    else { setPlaying({}); }   // pause all when off-screen
+    requestAnimationFrame(loop);
+  }
+  // kick off once the first clip has dimensions
+  function start(){
+    resize();
+    // warm up every clip: a brief play→pause forces a decoded first frame,
+    // so transitions never flash black waiting for the incoming clip
+    for(var i=0;i<N;i++){
+      (function(v){
+        var pr = v.play();
+        if(pr && pr.then){ pr.then(function(){ if(v!==vids[0]) v.pause(); }).catch(function(){}); }
+        else { if(v!==vids[0]) try{v.pause();}catch(e){} }
+      })(vids[i]);
+    }
+    requestAnimationFrame(loop);
+  }
+  if(vids[0].readyState>=1){ start(); }
+  else { vids[0].addEventListener('loadedmetadata', start, {once:true}); setTimeout(start, 1500); }
+})();
+
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// HERO — rotating manifesto phrases (fade + subtle rise, looping)
+// Same visual language as the manifesto section, kept lightweight
+// (CSS transitions only, no pixel/getImageData work) so it doesn't
+// add load to the scroll/dissolve engine.
+// ═══════════════════════════════════════════════════════
+(function(){
+  var host = document.getElementById('heroSub');
+  if(!host) return;
+
+  // manifesto phrases, in reading case (not uppercase, not italic)
+  var PHRASES = [
+    'A film production studio from Mexico City. We make commercials, narratives, and the occasional experiment.',
+    'We are bold — that\u2019s pretty much it.',
+    'Born in the scroll. Shaped by the chaos of CDMX.',
+    'A different eye. A different vision.',
+    'Not the generation they are used to seeing.',
+    'Making being bold our blueprint.'
+  ];
+
+  var HOLD = 3000;   // ms each phrase stays fully visible
+  var FADE = 600;    // ms (matches the CSS transition)
+  var i = 0;
+  var current = null;
+  var timer = null;
+
+  function clearTimer(){ if(timer){ clearTimeout(timer); timer = null; } }
+
+  // remove ANY phrase still in the host except the one we want to keep
+  function purge(keep){
+    var all = host.querySelectorAll('.hero-phrase');
+    for(var k=0;k<all.length;k++){ if(all[k]!==keep && all[k].parentNode){ all[k].parentNode.removeChild(all[k]); } }
+  }
+
+  // bring a phrase in (only ever one on screen)
+  function showNext(){
+    clearTimer();
+    purge(null);                 // nuke anything left over — guarantees single phrase
+    var el = document.createElement('span');
+    el.className = 'hero-phrase';
+    el.textContent = PHRASES[i];
+    host.appendChild(el);
+    void el.offsetWidth;          // reflow so it animates from the off state
+    el.classList.add('on');
+    current = el;
+
+    i = (i+1) % PHRASES.length;
+    timer = setTimeout(fadeOutThenNext, HOLD);
+  }
+
+  // fade current out, wait for it to fully leave, THEN show the next
+  function fadeOutThenNext(){
+    clearTimer();
+    if(current){
+      var leaving = current;
+      leaving.classList.remove('on');
+      current = null;
+      setTimeout(function(){ if(leaving && leaving.parentNode) leaving.parentNode.removeChild(leaving); }, FADE+80);
+    }
+    timer = setTimeout(showNext, FADE);   // gap = fade duration, no overlap
+  }
+
+  // pause the loop while the page tab is hidden (avoids parallel chains on return)
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden){ clearTimer(); }
+    else if(!timer){ timer = setTimeout(showNext, 300); }
+  });
+
+  showNext();
+})();
+
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// WE ARE / CHAOS — glitch driver
+// Fires a burst when the section enters view, then random
+// bursts on a loop while it stays visible. CSS does the heavy
+// lifting (animations); JS just toggles the .glitch class.
+// ═══════════════════════════════════════════════════════
+(function(){
+  var sec = document.getElementById('section-chaos');
+  if(!sec) return;
+  var lines = Array.prototype.slice.call(sec.querySelectorAll('.chaos-line'));
+  if(!lines.length) return;
+
+  var visible = false;
+  var loopTimer = null;
+
+  function burst(el){
+    el.classList.remove('glitch');
+    void el.offsetWidth;        // restart the animation
+    el.classList.add('glitch');
+    setTimeout(function(){ el.classList.remove('glitch'); }, 460);
+  }
+
+  function burstAll(){
+    // stagger the two lines slightly so it feels alive, not synced
+    burst(lines[0]);
+    setTimeout(function(){ if(lines[1]) burst(lines[1]); }, 90 + Math.random()*120);
+  }
+
+  function loop(){
+    if(!visible) return;
+    // sometimes glitch one line, sometimes both — random cadence
+    if(Math.random() < 0.6){ burstAll(); }
+    else { burst(lines[Math.floor(Math.random()*lines.length)]); }
+    loopTimer = setTimeout(loop, 1400 + Math.random()*2200);
+  }
+
+  var wrap = sec.querySelector('.chaos-wrap');
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting && e.intersectionRatio > 0.25){
+        if(!visible){
+          visible = true;
+          // 1) text grows from the center (where the water ripple opened)
+          if(wrap) wrap.classList.add('emerge');
+          // 2) once it has emerged, the glitch bloom kicks in
+          setTimeout(function(){ if(visible) burstAll(); }, 520);
+          loopTimer = setTimeout(loop, 1400);
+        }
+      } else {
+        visible = false;
+        if(wrap) wrap.classList.remove('emerge');   // reset so it re-emerges next time
+        if(loopTimer){ clearTimeout(loopTimer); loopTimer = null; }
+      }
+    });
+  }, {threshold:[0, 0.25, 0.6]});
+  io.observe(sec);
+})();
+
+</script>
+</body>
+</html>
