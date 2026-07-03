@@ -231,11 +231,15 @@
       line-height:1.24; min-height:3em; }
     .shapes-stage { height:480px; }
     .floating-img { width:200px; height:140px; }
-    /* Manifesto on mobile: knockout mask is off (perf), so give the blue lines
-       a white halo to stay legible where a blob passes under them, and let long
-       lines wrap instead of overflowing off-screen. */
-    .section-shapes .manifesto-line { white-space:normal; text-shadow:0 0 10px #fff, 0 0 3px #fff, 0 0 3px #fff; }
-    .section-shapes .shapes-title { text-shadow:0 0 12px #fff, 0 0 4px #fff; }
+    /* Manifesto on mobile: let long lines wrap instead of overflowing. The
+       white knockout layer (below) keeps text legible over the blobs — no glow. */
+    .section-shapes .manifesto-line { white-space:normal; }
+    /* Director overlay: pin the reel player to the top so it stays visible and
+       clearly playing while the thumbnail grid scrolls BEHIND it. Selecting a
+       thumb updates this pinned player instead of it scrolling out of view. */
+    .dir-body { padding-top:0; position:relative; }
+    .dir-hero { position:sticky; top:0; z-index:5; margin-bottom:clamp(14px,3.5vw,22px);
+      box-shadow:0 14px 26px rgba(1,1,80,0.22); }
   }
 </style>
 </head>
@@ -1031,13 +1035,11 @@ window.FXP = {
   var layerB = document.getElementById('shapes-black');
   if (!stage || !layerC || !layerM || !layerB) return;
 
-  // Mobile: the per-frame knockout mask (canvas → getImageData → toDataURL PNG
-  // → CSS mask-image, every other frame) is by far the heaviest cost in this
-  // section. Drop it on small screens and keep just the blue text over the
-  // metaballs — reads great, and cuts the per-frame work dramatically. We also
-  // run fewer balls so the SVG blur filter covers less area.
+  // Mobile flag: we keep the white knockout layer (so text reads over the
+  // blobs, no glow hack) but make it much cheaper here — fewer + smaller balls,
+  // a lower-res mask and a slower refresh (see updateKnockoutMask), so it costs
+  // a fraction of the desktop version while looking the same.
   var IS_MOBILE = (window.matchMedia && window.matchMedia('(max-width:900px)').matches) || window.innerWidth <= 900;
-  if (IS_MOBILE && knockout){ knockout.style.display = 'none'; }
 
   // Catalog of clip-paths. All normalized to fill the element.
   var SHAPES = {
@@ -1247,7 +1249,7 @@ window.FXP = {
       b.el_b.style.transform = 'translate(' + dxv.toFixed(1) + 'px,' + dyv.toFixed(1) + 'px) rotate(' + b.rot.toFixed(1) + 'deg)';
     }
 
-    if (!IS_MOBILE) updateKnockoutMask();
+    updateKnockoutMask();
 
     requestAnimationFrame(loop);
   }
@@ -1285,10 +1287,12 @@ window.FXP = {
   function updateKnockoutMask(){
     if(!knockout || !stage) return;
     maskFrame++;
-    if(maskFrame % 2 !== 0) return;          // throttle: every other frame
+    // mobile: refresh far less often (blobs move slowly, a slightly stale mask
+    // is imperceptible) and at lower resolution → a fraction of the cost.
+    if(maskFrame % (IS_MOBILE ? 5 : 2) !== 0) return;
     var kw = knockout.clientWidth, kh = knockout.clientHeight;
     if(kw<=0||kh<=0) return;
-    var SC = 0.5;                            // half-res mask for speed
+    var SC = IS_MOBILE ? 0.34 : 0.5;         // lower-res mask on mobile
     var MW = Math.round(kw*SC), MH = Math.round(kh*SC);
     if(maskCanvas.width!==MW || maskCanvas.height!==MH){ maskCanvas.width=MW; maskCanvas.height=MH; }
     var sRect = stage.getBoundingClientRect();
