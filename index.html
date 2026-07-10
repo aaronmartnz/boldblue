@@ -193,6 +193,13 @@
   .section-cta { background:#01017c; color:#fff; min-height:58vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:80px 32px; text-align:center; }
   .cta-kicker { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.35em; text-transform:uppercase; opacity:0.6; }
   .cta-title { font-family:'Inter Tight',sans-serif; font-weight:900; font-size:clamp(28px,5vw,64px); letter-spacing:-0.03em; line-height:0.98; text-transform:uppercase; max-width:16ch; }
+  .cta-mail { margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:13px; letter-spacing:0.1em; color:#fff; opacity:0.72; text-decoration:none; border-bottom:1px solid rgba(255,255,255,0.35); padding-bottom:2px; transition:opacity .25s ease, border-color .25s ease; }
+  .cta-mail:hover { opacity:1; border-color:#fff; }
+  /* bottom "back to home" control */
+  .site-foot { background:#01017c; color:#fff; display:flex; flex-direction:column; align-items:center; gap:12px; padding:36px 24px 54px; }
+  .to-top { width:56px; height:56px; border-radius:50%; border:1px solid rgba(255,255,255,0.4); background:transparent; color:#fff; font-size:22px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .25s ease, color .25s ease, transform .25s ease; }
+  .to-top:hover { background:#fff; color:#01017c; transform:translateY(-4px); }
+  .foot-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.25em; text-transform:uppercase; opacity:0.55; }
   .cta-btn { position:relative; overflow:visible; border:none; cursor:pointer; background:#fff; color:#01017c; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; letter-spacing:0.15em; text-transform:uppercase; padding:20px 44px; border-radius:0; isolation:isolate; transition:color .3s ease, box-shadow .45s ease; box-shadow:0 0 0 0 rgba(255,255,255,0); }
   /* canvas extends well beyond the button so pixels can scatter outward */
   .cta-btn canvas.pixfill { position:absolute; left:-28px; right:-28px; top:-28px; bottom:-28px; width:calc(100% + 56px); height:calc(100% + 56px); z-index:-1; pointer-events:none; }
@@ -275,14 +282,13 @@
     <div class="vcaption" id="vCaption">Adrian</div>
     <div class="vcount" id="vCount">01 / 05</div>
   </div>
-  <video id="clip0" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/adrian.mp4"></video>
-  <video id="clip1" data-zoom="1.22" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/cris.mp4"></video>
-  <video id="clip2" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/fusco.mp4"></video>
-  <video id="clip3" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/jafet.mp4"></video>
-  <video id="clip4" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/jayson.mp4"></video>
-  <!-- Nairobi real clip — standalone, NOT part of the 5-clip scroll reel.
-       The scroll engine only pulls clip0..clip4 (for i<5), so this stays out of the sequence
-       and is used purely as Nairobi's preview + portfolio source. -->
+  <video id="clip0" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/jayson.mp4"></video>
+  <video id="clip1" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/jafet.mp4"></video>
+  <video id="clip2" data-zoom="1.22" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/cris.mp4"></video>
+  <video id="clip3" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/adrian.mp4"></video>
+  <!-- clip4 (Fusco) & clip5 (Nairobi): NOT in the scroll reel — the engine pulls
+       only clip0..clip3 (i<4). These stay as director-only reels in the overlay. -->
+  <video id="clip4" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/fusco.mp4"></video>
   <video id="clip5" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/nairobi.mp4"></video>
 </section>
 
@@ -330,7 +336,14 @@
   <div class="cta-kicker">Let's make something bold</div>
   <h2 class="cta-title">Ready when you are</h2>
   <button class="cta-btn" id="ctaBtn"><canvas class="pixfill" id="ctaPix"></canvas><span>Click to action</span><span class="arrow">→</span></button>
+  <a class="cta-mail" href="mailto:hola@boldblue.com">hola@boldblue.com</a>
 </section>
+
+<!-- bottom control: back to home (top) -->
+<footer class="site-foot">
+  <button class="to-top" id="toTop" type="button" aria-label="Back to home">↑</button>
+  <span class="foot-label">Back to home</span>
+</footer>
 
 <!-- ═══════════════════════════════════════════════════════ -->
 <!-- DIRECTOR PORTFOLIO OVERLAY — floating menu over the page. -->
@@ -415,7 +428,7 @@ document.addEventListener('visibilitychange', function() {
 // activos (slices, fragments, blocks) — el ambient da personalidad.
 // Con hover: chroma sube de 0 a 20px → aparecen ghost cyan + azul claro.
 // ═══════════════════════════════════════════════════════
-var LOGO_SVG_RAW = '<svg xmlns="http://www.w3.org/2000/svg" width="563.9" height="107.9" viewBox="0 0 563.9 107.9" preserveAspectRatio="xMidYMid meet"><g fill="COLOR"><path d="M122.7,30.9c-10.2,0-19.9,4-27.1,11.2-7.2,7.2-11.2,16.9-11.2,27.1s4,19.9,11.2,27.1c7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1s-4-19.9-11.2-27.1c-7.2-7.2-16.9-11.2-27.1-11.2ZM122.7,88c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM44.4,0H0v107.9h44.4c17.6,0,32.1-14.2,32.1-31.8,0-8.3-3.1-16.2-8.9-22.2,5.8-6,8.9-13.8,8.9-22.2,0-17.5-14.5-31.8-32.1-31.8ZM44.4,88.3h-24.8v-24.5h25c3.3,0,6.4,1.3,8.7,3.6,2.3,2.3,3.6,5.4,3.6,8.7,0,6.7-5.6,12.2-12.5,12.2ZM53.4,40.5c-2.3,2.3-5.4,3.6-8.7,3.6h-25v-24.5h24.8c6.9,0,12.5,5.5,12.5,12.2,0,3.3-1.3,6.4-3.6,8.7ZM372.2,107.8h19.6V0h-19.6v107.8ZM169.8,107.8h19.6V0h-19.6v107.8ZM458.5,69.2c0,10.3-8.4,18.7-18.7,18.7s-18.7-8.4-18.7-18.7V29.7h-19.6v39.5c0,10.2,4,19.9,11.2,27.1,7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1V29.7h-19.6v39.5ZM563.9,79.1v-9.8c0-10.2-4-19.9-11.2-27.1-7.2-7.2-16.9-11.2-27.1-11.2s-19.9,4-27.1,11.2c-7.2,7.2-11.2,16.9-11.2,27.1h0s0,0,0,0c0,10.2,4,19.9,11.2,27.1,7.2,7.2,16.9,11.2,27.1,11.2s11.1-1.2,16.1-3.5c4-1.9,7.8-4.5,11-7.7,1.1-1.1,2-2.2,3-3.3l-4-1.9-11.4-5.4-3.4-1.6h0c-2,1.5-4.2,2.6-6.7,3.3-1.5.4-3.1.6-4.7.6-4.4,0-8.5-1.5-11.7-4.1-1.7-1.4-3.2-3-4.3-4.9h0s54.3,0,54.3,0ZM525.6,50.5c6.7,0,12.7,3.6,16,8.9h-31.9c3.3-5.4,9.2-8.9,16-8.9ZM254.1,35.8c-5.7-3.2-12.1-4.9-18.7-4.9-10.2,0-19.9,4-27.1,11.2-7.2,7.2-11.2,16.9-11.2,27.1s4,19.9,11.2,27.1c7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1V0h-19.6v35.7ZM235.4,88c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM326.6,30.9c-6.7,0-13.1,1.7-18.7,4.9V0h-19.6v69.2c0,10.2,4,19.9,11.2,27.1,7.2,7.2,16.9,11.2,27.1,11.2s19.9-4,27.1-11.2c7.2-7.2,11.2-16.9,11.2-27.1s-4-19.9-11.2-27.1c-7.2-7.2-16.9-11.2-27.1-11.2ZM326.6,88c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7Z"/></g></svg>';
+var LOGO_SVG_RAW = '<svg xmlns="http://www.w3.org/2000/svg" width="563.9" height="107.6" viewBox="0 0 563.9 107.6" preserveAspectRatio="xMidYMid meet"><path fill="COLOR" d="M563.9,69.1c0-10.2-4-19.8-11.2-27.1-7.2-7.2-16.8-11.2-27.1-11.2s-19.8,4-27.1,11.2c-7.2,7.2-11.2,16.8-11.2,27.1h0s0,0,0,0c0,10.2,4,19.8,11.2,27.1,7.2,7.2,16.8,11.2,27.1,11.2s19.8-4,27.1-11.2c1.1-1.1,2-2.2,3-3.3l-22.2-6.8c-2.4,1.1-5,1.7-7.8,1.7-6.7,0-12.6-3.6-15.9-8.9h0s54.2,0,54.2,0v-9.8ZM509.7,59.3c3.3-5.3,9.2-8.9,15.9-8.9s12.6,3.6,15.9,8.9h-31.8ZM123.5,30.8c-10.2,0-19.8,4-27.1,11.2-7.2,7.2-11.2,16.8-11.2,27.1s4,19.8,11.2,27.1c7.2,7.2,16.8,11.2,27.1,11.2s19.8-4,27.1-11.2c7.2-7.2,11.2-16.8,11.2-27.1s-4-19.8-11.2-27.1-16.8-11.2-27.1-11.2ZM123.5,87.8c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM38.3,30.8c-6.7,0-13,1.7-18.7,4.9V0H0v69.1c0,10.2,4,19.8,11.2,27.1,7.2,7.2,16.8,11.2,27.1,11.2s19.8-4,27.1-11.2c7.2-7.2,11.2-16.8,11.2-27.1s-4-19.8-11.2-27.1c-7.2-7.2-16.8-11.2-27.1-11.2ZM38.3,87.8c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM458.7,69.1c0,10.3-8.4,18.7-18.7,18.7s-18.7-8.4-18.7-18.7V29.6h-19.6v39.5c0,10.2,4,19.8,11.2,27.1,7.2,7.2,16.8,11.2,27.1,11.2s19.8-4,27.1-11.2c7.2-7.2,11.2-16.8,11.2-27.1V29.6h-19.6v39.5ZM327,30.8c-6.7,0-13,1.7-18.7,4.9V0h-19.6v69.1c0,10.2,4,19.8,11.2,27.1,7.2,7.2,16.8,11.2,27.1,11.2s19.8-4,27.1-11.2c7.2-7.2,11.2-16.8,11.2-27.1s-4-19.8-11.2-27.1c-7.2-7.2-16.8-11.2-27.1-11.2ZM327,87.8c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM372.5,107.6h19.6V0h-19.6v107.6ZM254.7,35.6c-5.6-3.2-12-4.9-18.7-4.9-10.2,0-19.8,4-27.1,11.2s-11.2,16.8-11.2,27.1,4,19.8,11.2,27.1c7.2,7.2,16.8,11.2,27.1,11.2s19.8-4,27.1-11.2c7.2-7.2,11.2-16.8,11.2-27.1V0h-19.6v35.6ZM236,87.8c-10.3,0-18.7-8.4-18.7-18.7s8.4-18.7,18.7-18.7,18.7,8.4,18.7,18.7-8.4,18.7-18.7,18.7ZM170.6,107.6h19.6V0h-19.6v107.6Z"/></svg>';
 
 function makeLogo(color) {
   var img = new Image();
@@ -732,7 +745,7 @@ window.FXP = {
     octx.imageSmoothingEnabled=true; octx.imageSmoothingQuality='high';
     // preserve the wordmark's real aspect ratio (546.2 x 104.5 ≈ 5.23:1).
     // SVG data-URIs can report unreliable natural sizes, so use the known ratio.
-    var ar = 546.2/104.5;
+    var ar = 563.9/107.6;
     var dw = BW*0.66;            // target width ≈ 66% of canvas
     var dh = dw/ar;
     var maxH = BH*0.20;          // wordmark is wide & short — cap height low
@@ -1163,17 +1176,17 @@ function buildFragment(cfg){
   // without a video).
   var DIRECTORS = [
     {name:'Adolfo Margulis',    skills:'Fashion, visual, editorial', loc:'Mexicano / Mexico',     clip:null},
-    {name:'Adrian Davila',      skills:'Narrativo',                  loc:'Mexicano / Mexico',     clip:0},
+    {name:'Adrian Davila',      skills:'Narrativo',                  loc:'Mexicano / Mexico',     clip:3},
     {name:'Aristides Mantilla', skills:'Celebridad, narrativo',      loc:'Mexicano / LA',         clip:null},
-    {name:'Cristian Aguilar',   skills:'Videoclips, Celebrity',      loc:'Mexicano / Mexico',     clip:1},
+    {name:'Cristian Aguilar',   skills:'Videoclips, Celebrity',      loc:'Mexicano / Mexico',     clip:2},
     {name:'Denis Carrion',      skills:'Narrativo, visual',          loc:'Brasil',                clip:null},
     {name:'F. Paradise',        skills:'Animación, AI, VFX',         loc:'Argentino / Argentina', clip:null},
-    {name:'Jafet Soto',         skills:'Fashion, visual, Celebrity', loc:'Mexicano',              clip:3},
-    {name:'Jayson Bernal',      skills:'Visual, Narrativo, Fashion', loc:'Panameño / Panamá',     clip:4},
+    {name:'Jafet Soto',         skills:'Fashion, visual, Celebrity', loc:'Mexicano',              clip:1},
+    {name:'Jayson Bernal',      skills:'Visual, Narrativo, Fashion', loc:'Panameño / Panamá',     clip:0},
     {name:'Lucia Bulgheroni',   skills:'Stop Motion',                loc:'Italiana / Mexico',     clip:null},
     {name:'Luis Camaño',        skills:'Narrativo',                  loc:'Panameño / Panamá',     clip:null},
     {name:'Nairobi',            skills:'Narrativo, Documental',      loc:'Argentinos / Mexico',   clip:5},
-    {name:'Pablo Fusco',        skills:'IA, Humor',                  loc:'Argentino / LA',        clip:2}
+    {name:'Pablo Fusco',        skills:'IA, Humor',                  loc:'Argentino / LA',        clip:4}
   ];
 
   function clipSrc(n){
@@ -1529,9 +1542,9 @@ function buildFragment(cfg){
   if(!stage||!canvas) return;
   var ctx = canvas.getContext('2d');
 
-  var NAMES = ['Adrian Davila','Cristian Aguilar','Pablo Fusco','Jafet Soto','Jayson Bernal'];
+  var NAMES = ['Jayson','Jafet','Cris','Adrian'];
   var vids = [];
-  for(var i=0;i<5;i++){ vids.push(document.getElementById('clip'+i)); }
+  for(var i=0;i<4;i++){ vids.push(document.getElementById('clip'+i)); }
   var N = vids.length;
 
   // hero layer that we dissolve into clip0 on the way in
@@ -2027,6 +2040,9 @@ function buildFragment(cfg){
   iso.addEventListener('keydown', function(e){
     if(e.key==='Enter' || e.key===' ' || e.keyCode===13 || e.keyCode===32){ e.preventDefault(); goHome(); }
   });
+  // bottom "back to home" button shares the same smooth-scroll
+  var toTop = document.getElementById('toTop');
+  if(toTop){ toTop.addEventListener('click', goHome); }
 
   // Decide if the isotype currently sits over a dark background.
   var stage = document.getElementById('scrollStage');
