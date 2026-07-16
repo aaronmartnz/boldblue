@@ -762,7 +762,10 @@ window.FXP = {
   }
   function resize(){
     W=canvas.offsetWidth; H=canvas.offsetHeight;
-    var dpr=Math.min(window.devicePixelRatio||1,2);
+    // The fluid is soft & inky, so its display canvas doesn't need full retina.
+    // Capping at 1.5 (vs 2) cuts the per-frame fragment work ~1.8× with no
+    // visible loss. The logo bitmap keeps its own higher-res bake for crisp edges.
+    var dpr=Math.min(window.devicePixelRatio||1,1.5);
     canvas.width=Math.max(1,W*dpr); canvas.height=Math.max(1,H*dpr);
     bakeLogo();
   }
@@ -834,12 +837,16 @@ window.FXP = {
   var lastT=performance.now(), T=0;
   function step(now){
     var P=window.FXP;
-    var dt=Math.min((now-lastT)/1000,0.016); lastT=now; T+=dt*(window.FXP.speed||1);
     if(heroReady && !baked){bakeLogo();baked=true;}
 
     if (!window.__tabActive || (window.__sectionVisible && window.__sectionVisible['scrollStage']===false)) {
+      lastT=now;                       // stay parked without accumulating a huge dt
       requestAnimationFrame(step); return;
     }
+    // Cap the simulation to ~30fps — a soft inky field reads identically at 30 as
+    // at 60/120, and halving the sim+display passes is the single biggest win.
+    if((now-lastT)/1000 < 0.032){ requestAnimationFrame(step); return; }
+    var dt=Math.min((now-lastT)/1000,0.016); lastT=now; T+=dt*(window.FXP.speed||1);
     var cB=P.colB;
 
     // pointer drag
@@ -1308,6 +1315,7 @@ function buildFragment(cfg){
   var elNav   = document.getElementById('dirNav');
   var heroVid = null;
   var thumbVids = [];
+  var thumbIO = null;   // lazy-loads each thumbnail's video only when it scrolls into view
 
   // build the director switcher tabs (all 12 directors, alphabetical)
   var navTabs = {};
@@ -1330,6 +1338,7 @@ function buildFragment(cfg){
     if(heroVid){ try{heroVid.pause();}catch(e){} if(heroVid.parentNode) heroVid.parentNode.removeChild(heroVid); heroVid=null; }
   }
   function clearThumbs(){
+    if(thumbIO){ try{thumbIO.disconnect();}catch(e){} thumbIO=null; }
     thumbVids.forEach(function(v){ try{v.pause();}catch(e){} });
     thumbVids = [];
     elGrid.innerHTML = '';
@@ -1364,23 +1373,36 @@ function buildFragment(cfg){
       elHeroCap.textContent = '';
     }
 
-    // gallery = every director that HAS a reel → quick-jump between reels
+    // gallery = every director that HAS a reel → quick-jump between reels.
+    // Thumbnails load lazily: the video src is attached only when the cell
+    // scrolls into view (or on hover), so opening the overlay no longer decodes
+    // every reel at once — that simultaneous decode was the main open-jank.
     clearThumbs();
+    thumbIO = ('IntersectionObserver' in window) ? new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting && en.target._load){ en.target._load(); thumbIO.unobserve(en.target); }
+      });
+    }, {threshold:0.05}) : null;
     DIRECTORS.forEach(function(dd, j){
       if(dd.clip===null) return;
       var cell = document.createElement('div');
       cell.className = 'dir-thumb';
-      var tv = makeVideo(clipSrc(dd.clip), dd.posterTime);
+      var src = clipSrc(dd.clip);
+      var tv = makeVideo('', dd.posterTime);   // no src yet → no eager fetch/decode
+      tv.preload = 'none';
       cell.appendChild(tv);
+      var loaded = false;
+      cell._load = function(){ if(loaded) return; loaded=true; tv.preload='auto'; if(src) tv.src=src; };
       var cap = document.createElement('div');
       cap.className = 'dir-thumb-cap';
       cap.textContent = dd.name;
       cell.appendChild(cap);
-      cell.addEventListener('mouseenter', function(){ tv.currentTime=0; tv.play().catch(function(){}); });
+      cell.addEventListener('mouseenter', function(){ cell._load(); tv.currentTime=0; tv.play().catch(function(){}); });
       cell.addEventListener('mouseleave', function(){ tv.pause(); });
       (function(jid){ cell.addEventListener('click', function(){ openDir(jid); }); })(String(j));
       thumbVids.push(tv);
       elGrid.appendChild(cell);
+      if(thumbIO){ thumbIO.observe(cell); } else { cell._load(); }
     });
 
     overlay.classList.add('open');
