@@ -290,6 +290,8 @@
        only clip0..clip3 (i<4). These stay as director-only reels in the overlay. -->
   <video id="clip4" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/fusco.mp4"></video>
   <video id="clip5" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/nairobi.mp4"></video>
+  <!-- clip6 (Oliver): director-only reel — not in the scroll reel either. -->
+  <video id="clip6" muted loop playsinline preload="metadata" crossorigin="anonymous" style="display:none" src="videos/oliver.mp4"></video>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════ -->
@@ -1186,6 +1188,7 @@ function buildFragment(cfg){
     {name:'Lucia Bulgheroni',   skills:'Stop Motion',                loc:'Italiana / Mexico',     clip:null},
     {name:'Luis Camaño',        skills:'Narrativo',                  loc:'Panameño / Panamá',     clip:null},
     {name:'Nairobi',            skills:'Narrativo, Documental',      loc:'Argentinos / Mexico',   clip:5},
+    {name:'Oliver',             skills:'Comercial, Publicidad',      loc:'',                      clip:6, posterTime:1.0},
     {name:'Pablo Fusco',        skills:'IA, Humor',                  loc:'Argentino / LA',        clip:4}
   ];
 
@@ -1194,7 +1197,7 @@ function buildFragment(cfg){
     var v = document.getElementById('clip'+n);
     return v ? (v.currentSrc || v.getAttribute('src') || '') : '';
   }
-  function makeVideo(src){
+  function makeVideo(src, posterTime){
     var v = document.createElement('video');
     v.muted = true; v.loop = true; v.playsInline = true;
     v.setAttribute('muted',''); v.setAttribute('playsinline','');
@@ -1203,10 +1206,13 @@ function buildFragment(cfg){
     // clips → served from cache.
     v.preload = 'auto';
     if(src) v.src = src;
+    // Some reels open (or, when looping, end) on a black frame — posterTime lets
+    // a director pin the still on a well-lit mid-clip frame instead of frame 0.
+    var seekTo = (typeof posterTime === 'number' && posterTime > 0) ? posterTime : 0.04;
     var painted = false;
     v.addEventListener('loadeddata', function(){
       if(painted) return; painted = true;
-      try{ if(v.paused && v.currentTime < 0.02){ v.currentTime = 0.04; } }catch(e){}
+      try{ if(v.paused && v.currentTime < 0.02){ v.currentTime = seekTo; } }catch(e){}
     });
     return v;
   }
@@ -1224,7 +1230,7 @@ function buildFragment(cfg){
       var fi = document.createElement('div');
       fi.className = 'floating-img';
       fi.setAttribute('data-i', i);
-      var v = makeVideo(clipSrc(d.clip));
+      var v = makeVideo(clipSrc(d.clip), d.posterTime);
       fi.appendChild(v);
       var tag = document.createElement('div');
       tag.className = 'fi-tag';
@@ -1341,7 +1347,7 @@ function buildFragment(cfg){
     clearHero();
     if(d.clip!==null){
       elHero.classList.remove('no-reel');
-      heroVid = makeVideo(clipSrc(d.clip));
+      heroVid = makeVideo(clipSrc(d.clip), d.posterTime);
       heroVid.autoplay = true;
       // unmuted autoplay allowed here: opening the overlay is a user gesture
       heroVid.muted = false; heroVid.removeAttribute('muted'); heroVid.volume = 1;
@@ -1364,7 +1370,7 @@ function buildFragment(cfg){
       if(dd.clip===null) return;
       var cell = document.createElement('div');
       cell.className = 'dir-thumb';
-      var tv = makeVideo(clipSrc(dd.clip));
+      var tv = makeVideo(clipSrc(dd.clip), dd.posterTime);
       cell.appendChild(tv);
       var cap = document.createElement('div');
       cap.className = 'dir-thumb-cap';
