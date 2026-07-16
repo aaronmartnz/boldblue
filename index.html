@@ -1056,6 +1056,7 @@ function draw(){
   }
 }
 function updateMask(){
+  if(CFG.flat){ return; }   /* mobile: no knockout mask → no per-frame canvas shimmer */
   if(!knock){ return; }
   mframe++; if(mframe%2!==0){ return; }
   var kw=knock.clientWidth, kh=knock.clientHeight; if(kw<=0||kh<=0){ return; }
@@ -1134,7 +1135,16 @@ function styleFor(cfg){
   + P+' .lqline{font-weight:900;text-transform:uppercase;letter-spacing:-0.02em;line-height:1.06;font-size:clamp(18px,3vw,46px);color:#01017c;opacity:0;transform:translateY(16px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1);white-space:normal;max-width:100%;text-wrap:balance;}'
   + P+' .lqknock .lqline{color:#f4f8ff;}'
   + P+' .lqline.lqfirst{font-size:clamp(22px,3.8vw,60px);}'
-  + P+' .lqline.lqon{opacity:1;transform:none;}';
+  + P+' .lqline.lqon{opacity:1;transform:none;}'
+  /* mobile fallback: no SVG goo (Safari can't merge it, Chrome shimmers it).
+     Solid pale-blue bubbles behind the dark-blue manifesto text — legible &
+     identical across browsers. Chroma layers + white knockout are dropped. */
+  + (cfg.flat ? (
+        P+' .lqlayer{filter:none;}'
+      + P+' .lqlc,'+P+' .lqlm{display:none;}'
+      + P+' .lqlb .lqball{background:#b9c8ff;}'
+      + P+' .lqknock{display:none;}'
+    ) : '');
 }
 
 function buildFragment(cfg){
@@ -1160,7 +1170,12 @@ function buildFragment(cfg){
   + '</div>\n';
 }
 
-  if(window.innerWidth<=900){ CFG.count = 9; }   // lighter on mobile
+  // Mobile: the SVG gooey filter is unreliable on touch browsers — Safari iOS
+  // doesn't merge the balls at all, and Chrome Android re-rasterizes the filter
+  // every frame so the knockout-text edges shimmer/"vibrate". So on touch we drop
+  // the goo + knockout mask and render clean, solid, legible bubbles instead.
+  var touchLike = window.innerWidth<=900 || (window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+  if(touchLike){ CFG.count = 9; CFG.flat = true; }   // lighter + filter-free on mobile
   host.innerHTML = buildFragment(CFG);
   (function(){ var s=host.querySelector('script'); if(s){ var run=document.createElement('script'); run.textContent=s.textContent; document.body.appendChild(run); } })();
 })();
@@ -1184,18 +1199,18 @@ function buildFragment(cfg){
   // or null when we don't have a reel for them yet (listed, overlay shows info
   // without a video).
   var DIRECTORS = [
-    {name:'Adolfo Margulis',    skills:'Fashion, visual, editorial', loc:'Mexicano / Mexico',     clip:null},
-    {name:'Adrian Davila',      skills:'Narrativo',                  loc:'Mexicano / Mexico',     clip:3},
-    {name:'Aristides Mantilla', skills:'Celebridad, narrativo',      loc:'Mexicano / LA',         clip:null},
-    {name:'Cristian Aguilar',   skills:'Videoclips, Celebrity',      loc:'Mexicano / Mexico',     clip:2},
-    {name:'Denis Carrion',      skills:'Narrativo, visual',          loc:'Brasil',                clip:null},
+    {name:'Adolfo Margulis',    skills:'Fashion, Visual, Editorial', loc:'Mexicano / México',     clip:null},
+    {name:'Adrian Davila',      skills:'Narrativo',                  loc:'Mexicano / México',     clip:3},
+    {name:'Aristides Mantilla', skills:'Celebridad, Narrativo',      loc:'Mexicano / LA',         clip:null},
+    {name:'Cristian Aguilar',   skills:'Videoclips, Celebrity',      loc:'Mexicano / México',     clip:2},
+    {name:'Denis Carrion',      skills:'Narrativo, Visual',          loc:'Brasileño / Brasil',    clip:null},
     {name:'F. Paradise',        skills:'Animación, AI, VFX',         loc:'Argentino / Argentina', clip:null},
-    {name:'Jafet Soto',         skills:'Fashion, visual, Celebrity', loc:'Mexicano',              clip:1},
+    {name:'Jafet Soto',         skills:'Fashion, Visual, Celebrity', loc:'Mexicano / México',     clip:1},
     {name:'Jayson Bernal',      skills:'Visual, Narrativo, Fashion', loc:'Panameño / Panamá',     clip:0},
-    {name:'Lucia Bulgheroni',   skills:'Stop Motion',                loc:'Italiana / Mexico',     clip:null},
+    {name:'Lucia Bulgheroni',   skills:'Stop Motion',                loc:'Italiana / México',     clip:null},
     {name:'Luis Camaño',        skills:'Narrativo',                  loc:'Panameño / Panamá',     clip:null},
-    {name:'Nairobi',            skills:'Narrativo, Documental',      loc:'Argentinos / Mexico',   clip:5},
-    {name:'Oliver',             skills:'Comercial, Publicidad',      loc:'',                      clip:6, posterTime:1.0},
+    {name:'Nairobi',            skills:'Narrativo, Documental',      loc:'Argentino / México',    clip:5},
+    {name:'Oliver Castro',      skills:'Comercial, Publicidad',      loc:'Mexicano / México',     clip:6, posterTime:1.0},
     {name:'Pablo Fusco',        skills:'IA, Humor',                  loc:'Argentino / LA',        clip:4}
   ];
 
