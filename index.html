@@ -988,6 +988,7 @@ if(!root){return;}
 var stage=document.getElementById(P+'-stage');
 var lb=document.getElementById(P+'-lb'), lc=document.getElementById(P+'-lc'), lm=document.getElementById(P+'-lm');
 var knock=document.getElementById(P+'-knock');
+var fluid=document.getElementById(P+'-fluid');   /* mobile: solid-blue fill shaped by the mask */
 var mcanvas=document.createElement('canvas');
 var mctx=mcanvas.getContext('2d');
 var blobs=[],W=0,H=0,MIN=0,RMAX=1,t=0,hover=0,started=false,mframe=0;
@@ -1062,10 +1063,9 @@ function draw(){
 function updateMask(){
   if(!knock){ return; }
   mframe++;
-  var everyN = CFG.flat ? 3 : 2;   /* lighter cadence on mobile */
-  if(mframe % everyN !== 0){ return; }
+  if(mframe % 2 !== 0){ return; }
   var kw=knock.clientWidth, kh=knock.clientHeight; if(kw<=0||kh<=0){ return; }
-  var SC=CFG.flat?0.5:0.66, MW=Math.round(kw*SC), MH=Math.round(kh*SC);
+  var SC=CFG.flat?0.6:0.66, MW=Math.round(kw*SC), MH=Math.round(kh*SC);
   if(mcanvas.width!==MW||mcanvas.height!==MH){ mcanvas.width=MW; mcanvas.height=MH; }
   var sR=stage.getBoundingClientRect(), kR=knock.getBoundingClientRect();
   var ox=(sR.left-kR.left)*SC, oy=(sR.top-kR.top)*SC;
@@ -1077,11 +1077,17 @@ function updateMask(){
     var img=mctx.getImageData(0,0,MW,MH), d=img.data;
     for(var p=3;p<d.length;p+=4){ var a=d[p]; d[p]= a<60?0 : (a>120?255 : Math.round((a-60)/60*255)); }
     mctx.putImageData(img,0,0);
+  } else {
+    /* mobile: harden the soft blurred alpha into a crisp liquid edge by
+       compositing the canvas over itself (cheap, GPU) — no per-pixel loop. */
+    mctx.globalCompositeOperation='source-over';
+    mctx.drawImage(mcanvas,0,0); mctx.drawImage(mcanvas,0,0); mctx.drawImage(mcanvas,0,0);
   }
-  /* mobile skips the per-pixel threshold — the soft blurred alpha reads fine as a
-     mask and avoids the getImageData/loop that made this section heavy & "vibrar". */
   var url=mcanvas.toDataURL();
+  /* liquid fill + knockout text share ONE mask → their edges match exactly, so
+     the intersection can't shimmer. */
   knock.style.webkitMaskImage='url('+url+')'; knock.style.maskImage='url('+url+')';
+  if(fluid){ fluid.style.webkitMaskImage='url('+url+')'; fluid.style.maskImage='url('+url+')'; }
 }
 function frame(){
   measure();
@@ -1131,6 +1137,7 @@ function styleFor(cfg){
   + P+' .lqdefs{position:absolute;width:0;height:0;}'
   + P+' .lqstage{position:absolute;inset:0;overflow:visible;}'
   + P+' .lqlayer{position:absolute;inset:0;filter:url(#'+cfg.p+'-goo);pointer-events:none;}'
+  + P+' .lqfluid{display:none;}'   /* desktop: unused; enabled only in the mobile flat path */
   + P+' .lqball{position:absolute;left:0;top:0;border-radius:50%;transform-origin:50% 50%;will-change:transform;}'
   + P+' .lqlb .lqball{background:#01017c;}'
   + P+' .lqlc{mix-blend-mode:multiply;opacity:0.72;}'
@@ -1146,14 +1153,16 @@ function styleFor(cfg){
   + P+' .lqline.lqfirst{font-size:clamp(22px,3.8vw,60px);}'
   + P+' .lqline.lqon{opacity:1;transform:none;}'
   /* mobile: the SVG url(#goo) filter doesn't merge on iOS Safari and shimmers on
-     Chrome Android. Swap it for a CSS blur+contrast goo on the stage (opaque
-     white bg so contrast crisps the RGB edges) — the classic metaball trick,
-     GPU-cheap and consistent across browsers. Chroma layers dropped; the blue↔
-     white knockout text contrast stays (generated cheaply in updateMask). */
+     Chrome Android. Instead we hide the DOM balls and paint ONE solid-blue fill
+     (.lqfluid) shaped by a shared goo mask (built cheaply in updateMask). The
+     white knockout text uses the SAME mask, so the liquid edge and the text
+     knockout edge are pixel-identical → no shimmer at the intersection. Color is
+     a single uniform blue (no contrast crush → no "negro con azul"). No chroma. */
   + (cfg.flat ? (
-        P+' .lqlayer{filter:none;}'
-      + P+' .lqstage{background:#fff;filter:blur(6px) contrast(15);}'
-      + P+' .lqlc,'+P+' .lqlm{display:none;}'
+        P+' .lqlb,'+P+' .lqlc,'+P+' .lqlm{display:none;}'
+      + P+' .lqfluid{display:block;position:absolute;inset:0;background:#01017c;'
+      +   '-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;'
+      +   '-webkit-mask-size:100% 100%;mask-size:100% 100%;pointer-events:none;}'
     ) : '');
 }
 
@@ -1170,6 +1179,7 @@ function buildFragment(cfg){
   +      '</filter>'
   +    '</defs></svg>\n'
   + '  <div class="lqstage" id="'+P+'-stage">'
+  +      '<div class="lqfluid" id="'+P+'-fluid"></div>'   /* mobile: solid-blue fill, shaped by the shared goo mask */
   +      '<div class="lqlayer lqlc" id="'+P+'-lc"></div>'
   +      '<div class="lqlayer lqlm" id="'+P+'-lm"></div>'
   +      '<div class="lqlayer lqlb" id="'+P+'-lb"></div>'
